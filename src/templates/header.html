@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Documentação</title>
+  <link id="theme-style" rel="stylesheet" href="styles/light.css">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; transition: background 0.3s, color 0.3s; }
+    header { padding: 10px; display: flex; justify-content: space-between; align-items: center; }
+    .theme-switch {
+      cursor: pointer;
+      background: none;
+      border: 1px solid #ccc;
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Minha Documentação</h1>
+  <button id="theme-toggle" class="theme-switch">🌙 Dark</button>
+</header>
+<main>
+<script>
+  const themeToggle = document.getElementById('theme-toggle');
+  const themeStyle = document.getElementById('theme-style');
+
+  function setTheme(theme) {
+    themeStyle.href = 'styles/' + theme + '.css';
+    localStorage.setItem('rhyla-theme', theme);
+    themeToggle.textContent = theme === 'light' ? '🌙 Dark' : '☀️ Light';
+  }
+
+  // Carrega tema salvo
+  const savedTheme = localStorage.getItem('rhyla-theme') || 'light';
+  setTheme(savedTheme);
+
+  themeToggle.addEventListener('click', () => {
+    const current = localStorage.getItem('rhyla-theme') || 'light';
+    setTheme(current === 'light' ? 'dark' : 'light');
+  });
+</script>

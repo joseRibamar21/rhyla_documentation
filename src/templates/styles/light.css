@@ -1,0 +1,39 @@
+body {
+  background: #fff;
+  color: #000;
+}
+
+header {
+  background: #f0f0f0;
+  color: #000;
+}
+
+footer {
+  background: #f0f0f0;
+  color: #000;
+}
+
+.container {
+  display: flex;
+}
+
+.sidebar {
+  width: 250px;
+  padding: 10px;
+  border-right: 1px solid #ccc;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar a {
+  text-decoration: none;
+  color: inherit;
+}
+
+.content {
+  flex: 1;
+  padding: 20px;
+}
