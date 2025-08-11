@@ -1,0 +1,122 @@
+:root{
+  --rh-header-height: 64px;
+  --rh-footer-height: 48px;
+  --rh-sidebar-width: 260px;
+  --rh-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* cores base (serão sobrescritas pelos temas) */
+  --rh-bg: #ffffff;
+  --rh-text: #111827;
+  --rh-header-bg: #ffffff;
+  --rh-footer-bg: #ffffff;
+  --rh-sidebar-bg: #f7f7f9;
+  --rh-accent: #0066ff;
+  --rh-active-bg: rgba(0,102,255,0.08);
+  --rh-muted: #6b7280;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--rh-font-family);
+  background: var(--rh-bg);
+  color: var(--rh-text);
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+}
+
+/* HEADER (fixo no topo) */
+.rhyla-header{
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--rh-header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: var(--rh-header-bg);
+  z-index: 1002;
+  box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+}
+
+/* FOOTER (fixo embaixo) */
+.rhyla-footer{
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--rh-footer-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  background: var(--rh-footer-bg);
+  z-index: 1002;
+  box-shadow: 0 -1px 0 rgba(0,0,0,0.04);
+}
+
+/* SIDEBAR (fixa entre header e footer, com rolagem própria) */
+.rhyla-sidebar{
+  position: fixed;
+  top: var(--rh-header-height);
+  left: 0;
+  width: var(--rh-sidebar-width);
+  bottom: var(--rh-footer-height);
+  background: var(--rh-sidebar-bg);
+  padding: 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  z-index: 1001;
+}
+
+/* CONTEÚDO PRINCIPAL (após a sidebar, rolagem interna) */
+.rhyla-main{
+  margin-left: var(--rh-sidebar-width);
+  margin-top: var(--rh-header-height);
+  margin-bottom: var(--rh-footer-height);
+  padding: 24px;
+  height: calc(100vh - var(--rh-header-height) - var(--rh-footer-height));
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+/* Layout responsivo: em telas pequenas, sidebar vira colapsável (comportamento básico) */
+@media (max-width: 760px) {
+  .rhyla-sidebar{
+    position: fixed;
+    width: 220px;
+    transform: translateX(-100%);
+    transition: transform .2s ease;
+  }
+  .rhyla-sidebar.open { transform: translateX(0); }
+  .rhyla-main { margin-left: 0; }
+}
+
+/* Sidebar list */
+.rhyla-sidebar ul { list-style: none; padding: 0; margin: 0; }
+.rhyla-sidebar li { margin: 4px 0; padding: 4px 6px; border-radius: 4px; }
+.rhyla-sidebar a {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: 6px 4px;
+}
+
+/* ativo */
+.rhyla-sidebar li.active a { color: var(--rh-accent); font-weight: 600; }
+.rhyla-sidebar li.active { background: var(--rh-active-bg); }
+
+/* header / brand / switch */
+.rhyla-brand h1 { margin: 0; font-size: 16px; }
+.theme-switch {
+  cursor: pointer;
+  background: none;
+  border: 1px solid rgba(0,0,0,0.08);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+}

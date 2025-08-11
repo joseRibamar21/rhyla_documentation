@@ -29,7 +29,7 @@ export default function init() {
   // Copiar CSS
   fs.mkdirSync(path.join(targetDir, 'styles'));
   const stylesDir = path.join(__dirname, '../templates/styles');
-  ['light.css', 'dark.css'].forEach(file => {
+  ['light.css', 'dark.css', 'global.css'].forEach(file => {
     fs.copyFileSync(
       path.join(stylesDir, file),
       path.join(targetDir, 'styles', file)

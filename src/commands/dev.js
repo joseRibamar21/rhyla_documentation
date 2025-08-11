@@ -25,10 +25,18 @@ export default function dev() {
   app.get('/', (req, res) => {
     const homeHTML = fs.readFileSync(path.join(rhylaPath, 'home.html'), 'utf8');
     const sidebar = generateSidebarHTML(path.join(rhylaPath, 'body')); // sem seleção
-    res.send(header + `<div class="container">${sidebar}<div class="content">${homeHTML}</div></div>` + footer);
+
+    res.send(`
+    ${header}
+    ${sidebar}
+    <main class="rhyla-main">
+      ${homeHTML}
+    </main>
+    ${footer}
+  `);
   });
 
-  // Página de tópico com destaque
+  // Página de tópico
   app.get('/:group/:topic.html', (req, res) => {
     const { group, topic } = req.params;
     const filePath = path.join(rhylaPath, 'body', group, `${topic}.md`);
@@ -40,7 +48,14 @@ export default function dev() {
     const content = md.render(fs.readFileSync(filePath, 'utf8'));
     const sidebar = generateSidebarHTML(path.join(rhylaPath, 'body'), group, topic);
 
-    res.send(header + `<div class="container">${sidebar}<div class="content">${content}</div></div>` + footer);
+    res.send(`
+    ${header}
+    ${sidebar}
+    <main class="rhyla-main">
+      ${content}
+    </main>
+    ${footer}
+  `);
   });
   // Iniciar servidor
   const port = 3000;
