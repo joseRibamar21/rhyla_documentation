@@ -34,3 +34,10 @@ thead th {
 
 tbody tr:nth-child(odd) { background: #fff; }
 tbody tr:nth-child(even) { background: #f8fafc; }
+
+pre {
+  background: rgba(0,0,0,0.03);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+}

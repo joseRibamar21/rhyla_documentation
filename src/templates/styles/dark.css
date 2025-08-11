@@ -35,3 +35,11 @@ thead th {
 
 tbody tr:nth-child(odd) { background: rgba(255,255,255,0.01); }
 tbody tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+
+
+pre {
+  background: rgba(255,255,255,0.05);
+  padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
