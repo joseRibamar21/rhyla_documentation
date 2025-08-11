@@ -27,7 +27,10 @@ export default function build() {
   // Ler header/footer
   const header = fs.readFileSync(path.join(rhylaPath, 'header.html'), 'utf8');
   const footer = fs.readFileSync(path.join(rhylaPath, 'footer.html'), 'utf8');
-  const notFoundHTML = fs.readFileSync(path.join(templatesPath, 'notFound.html'), 'utf8');
+  const notFoundTemplatePath = path.join(templatesPath, 'notFound.html');
+  const notFoundHTML = fs.existsSync(notFoundTemplatePath)
+    ? fs.readFileSync(notFoundTemplatePath, 'utf8')
+    : '<h1>404</h1>';
 
   const bodyPath = path.join(rhylaPath, 'body');
 
@@ -41,12 +44,14 @@ export default function build() {
       header + sidebar + `<main class="rhyla-main">${content}</main>` + footer
     );
   } else {
-    // Se não tiver home, usar notFound
+    const sidebar = generateSidebarHTML(bodyPath, null, null);
     fs.writeFileSync(
       path.join(distPath, 'index.html'),
-      header + notFoundHTML + footer
+      header + sidebar + `<main class="rhyla-main">${notFoundHTML}</main>` + footer
     );
   }
+
+  const EXCLUDE = new Set(['home.md','home.html','notfound.html','notfound.md','notfound.htm','notfound']);
 
   // Função recursiva para gerar páginas
   function processDir(dir, relPath = '') {
@@ -58,39 +63,51 @@ export default function build() {
 
       if (item.isDirectory()) {
         processDir(itemPath, itemRel);
-      } else if ((item.name.endsWith('.md') || item.name.endsWith('.html')) &&
-                 item.name !== 'home.md' &&
-                 item.name !== 'notFound.html') {
+        continue;
+      }
 
-        const group = relPath.split(path.sep)[0] || null;
-        const topic = path.basename(item.name, path.extname(item.name));
+      const lower = item.name.toLowerCase();
+      if (!(item.name.endsWith('.md') || item.name.endsWith('.html'))) continue;
+      if (EXCLUDE.has(lower)) continue;
 
-        let content = '';
-        if (item.name.endsWith('.md')) {
-          content = md.render(fs.readFileSync(itemPath, 'utf8'));
-        } else {
-          content = fs.readFileSync(itemPath, 'utf8');
-        }
+      const topic = path.basename(item.name, path.extname(item.name));
+      // group = primeiro segmento se houver subdiretório
+      const group = relPath ? relPath.split(path.sep)[0] : null;
 
-        const sidebar = generateSidebarHTML(bodyPath, group, topic);
+      let content = '';
+      if (item.name.endsWith('.md')) {
+        content = md.render(fs.readFileSync(itemPath, 'utf8'));
+      } else {
+        content = fs.readFileSync(itemPath, 'utf8');
+      }
 
-        // Criar diretório no dist
-        const outDir = path.join(distPath, relPath);
-        fs.mkdirSync(outDir, { recursive: true });
+      const sidebar = generateSidebarHTML(bodyPath, group, topic);
 
-        // Salvar página
-        fs.writeFileSync(
-          path.join(outDir, `${topic}.html`),
-          header + sidebar + `<main class="rhyla-main">${content}</main>` + footer
-        );
+      const outDir = path.join(distPath, relPath);
+      fs.mkdirSync(outDir, { recursive: true });
+
+      const pageHTML = header + sidebar + `<main class=\"rhyla-main\">${content}</main>` + footer;
+
+      // Salva como topic.html (mantém padrão de links existentes)
+      fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
+
+      // Se estiver no nível raiz (relPath === '') gerar também /topic/index.html para URL limpa /topic/
+      if (!relPath) {
+        const cleanDir = path.join(distPath, topic);
+        fs.mkdirSync(cleanDir, { recursive: true });
+        fs.writeFileSync(path.join(cleanDir, 'index.html'), pageHTML);
       }
     }
   }
 
   processDir(bodyPath);
 
-  // Criar notFound.html no dist (página de erro padrão)
-  fs.writeFileSync(path.join(distPath, '404.html'), header + notFoundHTML + footer);
+  // 404 com sidebar
+  const sidebar404 = generateSidebarHTML(bodyPath, null, null);
+  fs.writeFileSync(
+    path.join(distPath, '404.html'),
+    header + sidebar404 + `<main class=\"rhyla-main\">${notFoundHTML}</main>` + footer
+  );
 
   console.log('✅ Build concluído com sucesso.');
 }

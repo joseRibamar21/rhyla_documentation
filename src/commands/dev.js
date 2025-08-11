@@ -27,15 +27,56 @@ export default function dev() {
   app.get('/', (req, res) => {
     const homePath = path.join(rhylaPath, 'body', 'home.md');
     if (!fs.existsSync(homePath)) {
-      const notFound = fs.readFileSync(notFoundPath, 'utf8');
-      return res.status(404).send(notFound);
+      const notFound = fs.existsSync(notFoundPath) ? fs.readFileSync(notFoundPath, 'utf8') : '<h1>404</h1>';
+      const sidebar = generateSidebarHTML(path.join(rhylaPath, 'body'), null, null);
+      return res.status(404).send(header + sidebar + `<main class="rhyla-main">${notFound}</main>` + footer);
     }
     const content = md.render(fs.readFileSync(homePath, 'utf8'));
     const sidebar = generateSidebarHTML(path.join(rhylaPath, 'body'), null, 'home');
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>` + footer);
   });
 
-  // Rota tópicos
+  // ROTA EXTRA: /arquivo.html no nível raiz
+  app.get('/:topic.html', (req, res, next) => {
+    const { topic } = req.params; // topic sem extensão
+    if (topic === 'styles') return next();
+    const fileMd = path.join(rhylaPath, 'body', `${topic}.md`);
+    const fileHtml = path.join(rhylaPath, 'body', `${topic}.html`);
+
+    let content = '';
+    if (fs.existsSync(fileMd)) {
+      content = md.render(fs.readFileSync(fileMd, 'utf8'));
+    } else if (fs.existsSync(fileHtml)) {
+      content = fs.readFileSync(fileHtml, 'utf8');
+    } else {
+      return next();
+    }
+    const sidebar = generateSidebarHTML(path.join(rhylaPath, 'body'), null, topic);
+    return res.send(header + sidebar + `<main class=\"rhyla-main\">${content}</main>` + footer);
+  });
+
+  // Arquivos root sem extensão na URL (/introducao)
+  app.get('/:topic', (req, res, next) => {
+    const { topic } = req.params;
+    if (topic.includes('.') || topic === 'styles') return next();
+
+    const fileMd = path.join(rhylaPath, 'body', `${topic}.md`);
+    const fileHtml = path.join(rhylaPath, 'body', `${topic}.html`);
+
+    let content = '';
+    if (fs.existsSync(fileMd)) {
+      content = md.render(fs.readFileSync(fileMd, 'utf8'));
+    } else if (fs.existsSync(fileHtml)) {
+      content = fs.readFileSync(fileHtml, 'utf8');
+    } else {
+      return next();
+    }
+
+    const sidebar = generateSidebarHTML(path.join(rhylaPath, 'body'), null, topic);
+    return res.send(header + sidebar + `<main class=\"rhyla-main\">${content}</main>` + footer);
+  });
+
+  // Rota para páginas dentro de grupos
   app.get('/:group/:topic.html', (req, res) => {
     const { group, topic } = req.params;
     const fileMd = path.join(rhylaPath, 'body', group, `${topic}.md`);
@@ -47,12 +88,20 @@ export default function dev() {
     } else if (fs.existsSync(fileHtml)) {
       content = fs.readFileSync(fileHtml, 'utf8');
     } else {
-      const notFound = fs.readFileSync(notFoundPath, 'utf8');
-      return res.status(404).send(header + notFound + footer);
+      const notFound = fs.existsSync(notFoundPath) ? fs.readFileSync(notFoundPath, 'utf8') : '<h1>404</h1>';
+      const sidebar = generateSidebarHTML(path.join(rhylaPath, 'body'), group, null);
+      return res.status(404).send(header + sidebar + `<main class=\"rhyla-main\">${notFound}</main>` + footer);
     }
 
     const sidebar = generateSidebarHTML(path.join(rhylaPath, 'body'), group, topic);
-    res.send(header + sidebar + `<main class="rhyla-main">${content}</main>` + footer);
+    res.send(header + sidebar + `<main class=\"rhyla-main\">${content}</main>` + footer);
+  });
+
+  // 404 final com sidebar
+  app.use((req, res) => {
+    const notFound = fs.existsSync(notFoundPath) ? fs.readFileSync(notFoundPath, 'utf8') : '<h1>404</h1>';
+    const sidebar = generateSidebarHTML(path.join(rhylaPath, 'body'), null, null);
+    res.status(404).send(header + sidebar + `<main class=\"rhyla-main\">${notFound}</main>` + footer);
   });
 
   // Iniciar servidor
