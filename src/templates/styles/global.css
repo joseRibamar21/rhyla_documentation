@@ -1,6 +1,6 @@
 :root{
   --rh-header-height: 64px;
-  --rh-footer-height: 48px;
+  --rh-footer-height: 28px;
   --rh-sidebar-width: 260px;
   --rh-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   /* cores base (serão sobrescritas pelos temas) */
@@ -19,6 +19,7 @@
 html, body {
   height: 100%;
   margin: 0;
+  overflow: hidden;
 }
 
 body {
@@ -82,7 +83,7 @@ body {
   margin-bottom: var(--rh-footer-height);
   padding: 24px;
   height: calc(100vh - var(--rh-header-height) - var(--rh-footer-height));
-  overflow: auto;
+  overflow-y: auto;
   box-sizing: border-box;
 }
 
