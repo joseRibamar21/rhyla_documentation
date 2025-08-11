@@ -124,6 +124,30 @@ body {
   font-size: 14px;
 }
 
+.rhyla-sidebar .group-header {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+  padding: 4px 0;
+}
+
+.dropdown-arrow {
+  display: inline-block;
+  margin-right: 4px;
+  transition: transform 0.3s ease;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(90deg);
+}
+
+.group-content {
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  padding-left: 1em;
+}
+
 /* TABELAS */
 table {
   border-collapse: collapse;
