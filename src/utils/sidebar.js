@@ -1,28 +1,31 @@
 import fs from 'fs';
 import path from 'path';
 
-export function generateSidebarHTML(bodyDir, activeGroup = null, activeTopic = null) {
-  if (!fs.existsSync(bodyDir)) return '<aside class="rhyla-sidebar"><p>Nenhum conteúdo</p></aside>';
+export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = null) {
+  const groups = fs.readdirSync(bodyPath).filter(g => fs.statSync(path.join(bodyPath, g)).isDirectory());
 
-  const groups = fs.readdirSync(bodyDir).filter(f => fs.statSync(path.join(bodyDir, f)).isDirectory());
+  let html = `<aside class="rhyla-sidebar"><ul>`;
 
-  let sidebarHTML = `<aside class="rhyla-sidebar"><ul>`;
-  groups.forEach(group => {
-    sidebarHTML += `<li class="group"><strong>${group}</strong><ul>`;
-    const topics = fs.readdirSync(path.join(bodyDir, group))
-      .filter(f => f.endsWith('.md'))
-      .sort();
+  // Home no topo
+  html += `<li class="${activeTopic === 'home' ? 'active' : ''}">
+             <a href="/">Home</a>
+           </li>`;
 
-    topics.forEach(topic => {
-      const topicName = topic.replace('.md', '');
-      const isActive = group === activeGroup && topicName === activeTopic ? ' class="active"' : '';
-      const href = `/${encodeURIComponent(group)}/${encodeURIComponent(topicName)}.html`;
-      sidebarHTML += `<li${isActive}><a href="${href}">${topicName}</a></li>`;
-    });
+  for (const group of groups) {
+    html += `<li class="group">${group}<ul>`;
+    const topics = fs.readdirSync(path.join(bodyPath, group))
+      .filter(f => (f.endsWith('.md') || f.endsWith('.html')) && f !== 'notFound.html' && f !== 'home.md')
+      .map(f => path.basename(f, path.extname(f)));
 
-    sidebarHTML += `</ul></li>`;
-  });
-  sidebarHTML += `</ul></aside>`;
+    for (const topic of topics) {
+      const isActive = group === activeGroup && topic === activeTopic;
+      html += `<li class="${isActive ? 'active' : ''}">
+                 <a href="/${group}/${topic}.html">${topic}</a>
+               </li>`;
+    }
+    html += `</ul></li>`;
+  }
 
-  return sidebarHTML;
+  html += `</ul></aside>`;
+  return html;
 }

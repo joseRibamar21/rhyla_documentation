@@ -12,6 +12,8 @@
   --rh-accent: #0066ff;
   --rh-active-bg: rgba(0,102,255,0.08);
   --rh-muted: #6b7280;
+  --rh-transition: all 0.2s ease-in-out;
+
 }
 
 html, body {

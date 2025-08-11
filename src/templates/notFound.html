@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Página Não Encontrada</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      background: #f8fafc;
+      color: #222;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .notfound-container {
+      text-align: center;
+      background: #fff;
+      padding: 40px 32px 32px 32px;
+      border-radius: 16px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+      max-width: 400px;
+    }
+    .notfound-title {
+      font-size: 3rem;
+      margin-bottom: 0.5em;
+      color: #007bff;
+    }
+    .notfound-msg {
+      font-size: 1.2rem;
+      margin-bottom: 1.5em;
+    }
+    .notfound-btn {
+      background: #007bff;
+      color: #fff;
+      border: none;
+      padding: 10px 24px;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .notfound-btn:hover {
+      background: #0056b3;
+    }
+    .notfound-quote {
+      margin-top: 2em;
+      color: #888;
+      font-style: italic;
+      font-size: 0.95em;
+    }
+  </style>
+</head>
+<body>
+  <div class="notfound-container">
+    <div class="notfound-title">404</div>
+    <div class="notfound-msg">Oops! A página que você procura não foi encontrada.<br>Talvez o endereço esteja incorreto ou a página foi removida.</div>
+    <button class="notfound-btn" onclick="window.location.href='/'">Voltar para a Home</button>
+    <div class="notfound-quote">“Nem toda rota leva a um destino, mas toda dúvida pode ser esclarecida!”</div>
+  </div>
+</body>
+</html>

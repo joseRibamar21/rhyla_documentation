@@ -1,43 +1,34 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import chalk from 'chalk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default function init() {
-  const targetDir = path.resolve(process.cwd(), 'rhyla');
+  const root = process.cwd();
+  const rhylaPath = path.join(root, 'rhyla');
+  const templatesPath = path.join(__dirname, '../templates'); // caminho fixo relativo ao init.js
 
-  if (fs.existsSync(targetDir)) {
-    console.log(chalk.red('❌ A pasta "rhyla" já existe.'));
-    return;
+  if (!fs.existsSync(templatesPath)) {
+    console.error('❌ Pasta "templates" não encontrada.');
+    process.exit(1);
   }
 
-  fs.mkdirSync(targetDir);
-  fs.mkdirSync(path.join(targetDir, 'body'));
+  // Criar pasta rhyla e subpastas
+  fs.mkdirSync(rhylaPath, { recursive: true });
+  fs.mkdirSync(path.join(rhylaPath, 'body'), { recursive: true });
+  fs.mkdirSync(path.join(rhylaPath, 'styles'), { recursive: true });
 
-  // Copiar templates
-  const templatesDir = path.join(__dirname, '../templates');
-  ['header.html', 'footer.html', 'home.html', 'config.yaml'].forEach(file => {
-    fs.copyFileSync(
-      path.join(templatesDir, file),
-      path.join(targetDir, file)
-    );
-  });
+  // Copiar arquivos HTML base
+  fs.copyFileSync(path.join(templatesPath, 'header.html'), path.join(rhylaPath, 'header.html'));
+  fs.copyFileSync(path.join(templatesPath, 'footer.html'), path.join(rhylaPath, 'footer.html'));
 
-  // Copiar CSS
-  fs.mkdirSync(path.join(targetDir, 'styles'));
-  const stylesDir = path.join(__dirname, '../templates/styles');
-  ['light.css', 'dark.css', 'global.css'].forEach(file => {
-    fs.copyFileSync(
-      path.join(stylesDir, file),
-      path.join(targetDir, 'styles', file)
-    );
-  });
+  // Copiar home para body
+  fs.copyFileSync(path.join(templatesPath, 'home.md'), path.join(rhylaPath, 'body', 'home.md'));
 
-  // Criar arquivo markdown exemplo
-  fs.writeFileSync(path.join(targetDir, 'body', 'exemplo.md'), '# Página de Exemplo\n\nBem-vindo à sua documentação!');
+  // Copiar estilos
+  fs.cpSync(path.join(templatesPath, 'styles'), path.join(rhylaPath, 'styles'), { recursive: true });
 
-  console.log(chalk.green('✅ Estrutura criada com sucesso!'));
+  console.log('✅ Projeto inicializado com sucesso.');
 }
