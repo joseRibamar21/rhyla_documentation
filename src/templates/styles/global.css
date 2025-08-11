@@ -122,3 +122,10 @@ body {
   border-radius: 6px;
   font-size: 14px;
 }
+
+/* TABELAS */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  border-spacing: 0;
+}
