@@ -3,6 +3,7 @@ import path from 'path';
 import markdownIt from 'markdown-it';
 import { generateSidebarHTML } from '../utils/sidebar.js';
 import { spawnSync } from 'child_process';
+import os from 'os';
 
 export default function build() {
   const root = process.cwd();
@@ -24,8 +25,13 @@ export default function build() {
   fs.mkdirSync(path.join(distPath, 'styles'), { recursive: true });
   fs.cpSync(path.join(rhylaPath, 'styles'), path.join(distPath, 'styles'), { recursive: true });
 
+  // Detectar pasta de scripts (oculta no Unix)
+  const isWindows = os.platform() === 'win32';
+  const scriptsFolderName = isWindows ? 'scripts' : '.scripts';
+  const scriptsFolderPath = path.join(rhylaPath, scriptsFolderName);
+
   // Gerar índice de busca (usa o script do projeto)
-  const searchScript = path.join(rhylaPath, 'scripts', 'generateSearchIndex.js');
+  const searchScript = path.join(scriptsFolderPath, 'generateSearchIndex.js');
   if (fs.existsSync(searchScript)) {
     console.log('🔍 Gerando índice de busca...');
     const res = spawnSync(process.execPath, [searchScript], { cwd: rhylaPath, stdio: 'inherit' });
@@ -34,16 +40,15 @@ export default function build() {
     }
   }
 
-  // Copiar scripts (inclui search_index.js se existir)
-  const scriptsSrc = path.join(rhylaPath, 'scripts');
+  // Copiar scripts (inclui search_index.js/json se existirem)
   const scriptsDst = path.join(distPath, 'scripts');
-  if (fs.existsSync(scriptsSrc)) {
+  if (fs.existsSync(scriptsFolderPath)) {
     fs.mkdirSync(scriptsDst, { recursive: true });
-    fs.cpSync(scriptsSrc, scriptsDst, { recursive: true });
+    fs.cpSync(scriptsFolderPath, scriptsDst, { recursive: true });
   }
 
-  // Copiar o JSON do índice para a raiz do dist, para atender fetch('/search_index.json')
-  const searchJsonSrc = path.join(rhylaPath, 'scripts', 'search_index.json');
+  // Copiar o JSON do índice também para a raiz do dist (compat)
+  const searchJsonSrc = path.join(scriptsFolderPath, 'search_index.json');
   const searchJsonDst = path.join(distPath, 'search_index.json');
   if (fs.existsSync(searchJsonSrc)) {
     fs.copyFileSync(searchJsonSrc, searchJsonDst);
@@ -66,13 +71,13 @@ export default function build() {
     const sidebar = generateSidebarHTML(bodyPath, null, 'home');
     fs.writeFileSync(
       path.join(distPath, 'index.html'),
-      header + sidebar + `<main class="rhyla-main">${content}</main>` + footer
+      header + sidebar + `<main class="rhyla-main">${content}</main>`
     );
   } else {
     const sidebar = generateSidebarHTML(bodyPath, null, null);
     fs.writeFileSync(
       path.join(distPath, 'index.html'),
-      header + sidebar + `<main class="rhyla-main">${notFoundHTML}</main>` + footer
+      header + sidebar + `<main class="rhyla-main">${notFoundHTML}</main>`
     );
   }
 
@@ -111,7 +116,7 @@ export default function build() {
       const outDir = path.join(distPath, relPath);
       fs.mkdirSync(outDir, { recursive: true });
 
-      const pageHTML = header + sidebar + `<main class=\"rhyla-main\">${content}</main>` + footer;
+      const pageHTML = header + sidebar + `<main class=\"rhyla-main\">${content}</main>`;
 
       // Salva como topic.html (mantém padrão de links existentes)
       fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
@@ -139,14 +144,14 @@ export default function build() {
     const sidebar = generateSidebarHTML(bodyPath, null, null);
     const outDir = path.join(distPath, 'buscar');
     fs.mkdirSync(outDir, { recursive: true });
-    fs.writeFileSync(path.join(outDir, 'index.html'), header + sidebar + `<main class=\"rhyla-main\">${content}</main>` + footer);
+    fs.writeFileSync(path.join(outDir, 'index.html'), header + sidebar + `<main class=\"rhyla-main\">${content}</main>`);
   }
 
   // 404 com sidebar
   const sidebar404 = generateSidebarHTML(bodyPath, null, null);
   fs.writeFileSync(
     path.join(distPath, '404.html'),
-    header + sidebar404 + `<main class=\"rhyla-main\">${notFoundHTML}</main>` + footer
+    header + sidebar404 + `<main class=\"rhyla-main\">${notFoundHTML}</main>`
   );
 
   console.log('✅ Build concluído com sucesso.');
