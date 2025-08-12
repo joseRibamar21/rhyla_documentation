@@ -37,7 +37,6 @@ body {
   right: 0;
   height: var(--rh-header-height);
   display: flex;
-  height: calc(100vh - var(--rh-header-height));
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
@@ -52,6 +51,7 @@ body {
   top: var(--rh-header-height);
   left: 0;
   width: var(--rh-sidebar-width);
+  height: calc(100vh - var(--rh-header-height));
   background: var(--rh-sidebar-bg);
   padding: 16px;
   box-sizing: border-box;

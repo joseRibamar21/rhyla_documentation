@@ -56,13 +56,6 @@ export default function dev() {
   app.use("/styles", express.static(path.join(rhylaPath, "styles")));
   app.use("/scripts", express.static(scriptsFolderPath));
 
-  // Servir o índice gerado
-  app.get("/search_index.json", (req, res) => {
-    const idxPath = path.join(scriptsFolderPath, "search_index.json");
-    if (!fs.existsSync(idxPath)) return res.status(404).send("[]");
-    res.sendFile(idxPath);
-  });
-
   // Ler header e footer
   const header = fs.readFileSync(path.join(rhylaPath, "header.html"), "utf8");
   const footer = fs.readFileSync(path.join(rhylaPath, "footer.html"), "utf8");
