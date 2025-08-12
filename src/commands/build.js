@@ -81,7 +81,11 @@ export default function build() {
     );
   }
 
-  const EXCLUDE = new Set(['home.md','home.html','notfound.html','notfound.md','notfound.htm','notfound']);
+  const EXCLUDE = new Set([
+    'home.md', 'home.html',
+    'notfound.html', 'notfound.md', 'notfound.htm', 'notfound',
+    'search.html', '.search.html', 'search.md', '.search.md'
+  ]);
 
   // Função recursiva para gerar páginas
   function processDir(dir, relPath = '') {
