@@ -1,89 +1,264 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <title>Buscar na Documentação</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; }
-    input { width: 100%; padding: 10px; font-size: 16px; }
-    .result { border-bottom: 1px solid #ccc; padding: 10px 0; }
-    .result a { font-weight: bold; text-decoration: none; color: blue; }
-    .snippet { font-size: 14px; color: #555; }
-    mark { background: yellow; }
+    :root {
+      --search-max-w: calc(100% - 132px);
+      --search-gap: 16px;
+      --search-radius: 12px;
+      --search-border: rgba(0, 0, 0, 0.08);
+      --search-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+      --search-muted: var(--rh-muted, #6b7280);
+      --search-accent: var(--rh-accent, #0066ff);
+      --search-active-bg: var(--rh-active-bg, rgba(0, 102, 255, 0.06));
+    }
+
+    .search-container {
+      max-width: var(--search-max-w);
+      margin: 0 auto
+    }
+
+    .search-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 4px 0 14px;
+    }
+
+    .search-title .badge {
+      font-size: 12px;
+      color: var(--search-muted);
+      border: 1px solid var(--search-border);
+      padding: 2px 6px;
+      border-radius: 999px;
+    }
+
+    .search-title h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: .3px;
+    }
+
+    .search-input-wrap {
+      position: relative;
+    }
+
+    .search-input-wrap .icon {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--search-muted);
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 14px 14px 14px 40px;
+      font-size: 16px;
+      border-radius: var(--search-radius);
+      border: 1px solid var(--search-border);
+      outline: none;
+      background: transparent;
+      color: inherit;
+      transition: box-shadow .2s ease, border-color .2s ease;
+    }
+
+    .search-input:focus {
+      border-color: var(--search-accent);
+      box-shadow: 0 0 0 4px var(--search-active-bg);
+    }
+
+    .meta {
+      margin: 12px 2px;
+      color: var(--search-muted);
+      font-size: 13px;
+    }
+
+    .results {
+      display: flex;
+      flex-direction: column;
+      gap: var(--search-gap);
+      margin-top: 12px;
+    }
+
+    .result {
+      padding: 14px 14px;
+      border: 1px solid var(--search-border);
+      border-radius: 10px;
+      transition: background .2s ease, transform .12s ease, border-color .2s ease;
+      animation: fadeInUp .25s ease both;
+    }
+
+    .result:hover {
+      background: var(--search-active-bg);
+      transform: translateY(-1px);
+      border-color: var(--search-accent);
+    }
+
+    .result a {
+      font-weight: 600;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .snippet {
+      font-size: 14px;
+      color: var(--search-muted);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    mark {
+      background: var(--search-active-bg);
+      color: inherit;
+      padding: 0 2px;
+      border-radius: 4px;
+      box-shadow: inset 0 -1px 0 var(--search-accent);
+    }
+
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .loading {
+      color: var(--search-muted);
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .dots::after {
+      content: '…';
+      animation: dots 1.2s steps(4, end) infinite;
+    }
+
+    @keyframes dots {
+      0% {
+        content: '';
+      }
+
+      25% {
+        content: '.';
+      }
+
+      50% {
+        content: '..';
+      }
+
+      75% {
+        content: '...';
+      }
+
+      100% {
+        content: '...';
+      }
+    }
   </style>
 </head>
+
 <body>
-  <h1>Buscar</h1>
-  <input id="searchBox" type="text" placeholder="Digite para buscar...">
-  <div id="results"></div>
+  <div class="search-container">
+    <div class="search-title">
+      <svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" style="opacity:.8">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <h1>Buscar</h1>
+      <span class="badge">Cmd/Ctrl + F</span>
+    </div>
+
+    <div class="search-input-wrap">
+      <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input id="searchBox" class="search-input" type="text"
+        placeholder="Digite para buscar tópicos, termos, comandos...">
+    </div>
+
+    <div class="meta" id="meta">Carregando índice<span class="dots"></span></div>
+
+    <div id="results" class="results" role="list"></div>
+  </div>
 
   <script>
     let index = [];
-    const resultsDiv = document.getElementById("results");
-    const searchBox = document.getElementById("searchBox");
+    const resultsDiv = document.getElementById('results');
+    const searchBox = document.getElementById('searchBox');
+    const meta = document.getElementById('meta');
 
-    // Usar caminho absoluto para evitar /buscar/search_index.json
-    fetch("/search_index.json")
-      .then(res => res.json())
-      .then(data => { index = data; });
+    // Carrega índice (via rota). Mantemos simples e robusto.
+    fetch('/search_index.json')
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        index = Array.isArray(data) ? data : [];
+        meta.textContent = index.length ? `${index.length} páginas indexadas` : 'Nenhuma página indexada';
+      })
+      .catch(() => { meta.textContent = 'Falha ao carregar índice'; });
 
     function highlight(text, query) {
-      const regex = new RegExp(`(${query})`, "gi");
-      return text.replace(regex, "<mark>$1</mark>");
+      const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp('(' + esc + ')', 'gi');
+      return text.replace(regex, '<mark>$1</mark>');
     }
 
     function toHref(p) {
       const lower = p.toLowerCase();
       if (lower === 'home.md' || lower === 'home.html') return '/';
-      // trocar .md por .html
       let clean = p.replace(/\.md$/i, '.html');
-      // garantir prefixo raiz
       if (!clean.startsWith('/')) clean = '/' + clean;
       return clean;
     }
 
-    function toLabel(p) {
-      return p.replace(/\.(md|html)$/i, '');
-    }
+    function toLabel(p) { return p.replace(/\.(md|html)$/i, ''); }
 
     function search(query) {
-      if (!query) {
-        resultsDiv.innerHTML = "";
-        return;
-      }
+      const q = query.trim();
+      if (!q) { resultsDiv.innerHTML = ''; meta.textContent = index.length ? `${index.length} páginas indexadas` : 'Nenhuma página indexada'; return; }
       const results = [];
+      const ql = q.toLowerCase();
       index.forEach(page => {
-        const matchIndex = page.content.toLowerCase().indexOf(query.toLowerCase());
+        const hay = page.content.toLowerCase();
+        const matchIndex = hay.indexOf(ql);
         if (matchIndex !== -1) {
           const snippet = page.content.slice(Math.max(0, matchIndex - 40), matchIndex + 40);
-          results.push({
-            path: page.path,
-            href: toHref(page.path),
-            label: toLabel(page.path),
-            snippet: highlight(snippet, query)
-          });
+          results.push({ path: page.path, href: toHref(page.path), label: toLabel(page.path), snippet: highlight(snippet, q) });
         }
       });
       displayResults(results);
     }
 
     function displayResults(results) {
-      resultsDiv.innerHTML = "";
-      if (results.length === 0) {
-        resultsDiv.innerHTML = "<p>Nenhum resultado encontrado.</p>";
-        return;
-      }
-      results.forEach(r => {
-        const div = document.createElement("div");
-        div.className = "result";
-        div.innerHTML = `<a href="${r.href}">${r.label}</a><div class="snippet">... ${r.snippet} ...</div>`;
+      resultsDiv.innerHTML = '';
+      if (!results.length) { meta.textContent = 'Nenhum resultado encontrado'; return; }
+      meta.textContent = `${results.length} resultado(s)`;
+      results.forEach((r, i) => {
+        const div = document.createElement('div');
+        div.className = 'result';
+        div.style.setProperty('--delay', (i * 0.02) + 's');
+        div.innerHTML = `<a href="${r.href}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
         resultsDiv.appendChild(div);
       });
     }
 
-    searchBox.addEventListener("input", e => {
-      search(e.target.value);
-    });
+    // Debounce
+    function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); }; }
+    const onInput = debounce(e => search(e.target.value), 200);
+
+    searchBox.addEventListener('input', onInput);
   </script>
 </body>
+
 </html>
