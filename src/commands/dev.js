@@ -7,6 +7,7 @@ import spawn from "cross-spawn";
 import chokidar from "chokidar";
 import { fileURLToPath } from "url";
 import { generateSidebarHTML } from "../utils/sidebar.js";
+import yaml from "js-yaml";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,7 +66,6 @@ export default function dev() {
 
   // Ler header e footer
   const header = fs.readFileSync(path.join(rhylaPath, "header.html"), "utf8");
-  const footer = fs.readFileSync(path.join(rhylaPath, "footer.html"), "utf8");
 
   // Home
   app.get("/", (req, res) => {
@@ -133,6 +133,19 @@ export default function dev() {
     }
     const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), group, topic);
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
+  });
+
+  // Rota para servir config.yaml como /config.json
+  app.get("/config.json", (req, res) => {
+    const configPath = path.join(rhylaPath, "config.json");
+    if (!fs.existsSync(configPath)) return res.status(404).json({});
+    try {
+      const yamlText = fs.readFileSync(configPath, "utf8");
+      const config = yaml.load(yamlText);
+      res.json(config);
+    } catch (e) {
+      res.status(500).json({ error: "Invalid config.json" });
+    }
   });
 
   // 404 final

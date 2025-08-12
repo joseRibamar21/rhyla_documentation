@@ -20,7 +20,6 @@
   </header>
   
 <script>
-  // script simples para alternar temas e salvar em localStorage
   (function(){
     const themeToggle = document.getElementById('theme-toggle');
     const themeLink = document.getElementById('theme-style');
@@ -39,14 +38,11 @@
       setTheme(cur === 'light' ? 'dark' : 'light');
     });
 
-    // Carregar título do config.yaml (ou config.json)
     fetch('/config.json')
-      .then(r => r.ok ? r.text() : null)
-      .then(yaml => {
-        if (!yaml) return;
-        const match = yaml.match(/title:\s*['"]?(.+?)['"]?$/m);
-        if (match) {
-          document.getElementById('rhyla-title').textContent = match[1];
+      .then(r => r.ok ? r.json() : null)
+      .then(cfg => {
+        if (cfg && cfg.title) {
+          document.getElementById('rhyla-title').textContent = cfg.title;
         }
       });
   })();
