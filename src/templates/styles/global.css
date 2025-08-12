@@ -69,6 +69,19 @@ body {
   box-sizing: border-box;
 }
 
+.rhyla-footer{
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: var(--rh-sidebar-width);
+  height: 25px;
+  background: var(--rh-footer-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 -1px 0 rgba(0,0,0,0.06);
+}
+
 /* Layout responsivo: em telas pequenas, sidebar vira colapsável (comportamento básico) */
 @media (max-width: 760px) {
   .rhyla-sidebar{

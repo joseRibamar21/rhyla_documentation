@@ -62,7 +62,13 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     html += `</ul></li>`;
   }
 
-  html += `</ul></aside>`;
+  // Footer estático no final da sidebar
+  const footer = `
+  <footer class="rhyla-footer">
+    <p style="margin:0;font-size:13px;color:var(--rh-muted);">&copy; 2025 - Made with Rhyla</p>
+  </footer>`;
+
+  html += `</ul>${footer}</aside>`;
 
   // Script de controle (injetado no final)
   html += `

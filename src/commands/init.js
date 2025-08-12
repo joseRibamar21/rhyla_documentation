@@ -62,7 +62,6 @@ export default function init() {
 
   // Copiar header e footer
   fs.copyFileSync(path.join(templatesPath, 'header.html'), path.join(rhylaPath, 'header.html'));
-  fs.copyFileSync(path.join(templatesPath, 'footer.html'), path.join(rhylaPath, 'footer.html'));
   
   // Copiar home.md
   fs.copyFileSync(path.join(templatesPath, 'home.md'), path.join(rhylaPath, 'body', 'home.md'));

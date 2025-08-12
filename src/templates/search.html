@@ -182,7 +182,7 @@
         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
       </svg>
       <input id="searchBox" class="search-input" type="text"
-        placeholder="Digite para buscar tópicos, termos, comandos...">
+        placeholder="Write to search...">
     </div>
 
     <div class="meta" id="meta">Loading index<span class="dots"></span></div>
@@ -201,9 +201,9 @@
       .then(res => res.ok ? res.json() : [])
       .then(data => {
         index = Array.isArray(data) ? data : [];
-        meta.textContent = index.length ? `${index.length} páginas indexadas` : 'Nenhuma página indexada';
+        meta.textContent = index.length ? `${index.length} pages indexed` : 'No pages indexed';
       })
-      .catch(() => { meta.textContent = 'Falha ao carregar índice'; });
+      .catch(() => { meta.textContent = 'Failed to load index'; });
 
     function highlight(text, query) {
       const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -218,7 +218,7 @@
 
     function search(query) {
       const q = query.trim();
-      if (!q) { resultsDiv.innerHTML = ''; meta.textContent = index.length ? `${index.length} páginas indexadas` : 'Nenhuma página indexada'; return; }
+      if (!q) { resultsDiv.innerHTML = ''; meta.textContent = index.length ? `${index.length} pages indexed` : 'No pages indexed'; return; }
       const results = [];
       const ql = q.toLowerCase();
       index.forEach(page => {
