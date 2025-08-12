@@ -1,114 +1,132 @@
 # 📚 Rhyla Documentation
 
-O **Rhyla Documentation** é uma ferramenta simples e flexível para criar e organizar documentações de forma rápida, utilizando arquivos **Markdown** e templates personalizáveis.  
-A ideia central é permitir que o desenvolvedor mantenha toda a documentação de um projeto organizada, navegável e com suporte a temas claros e escuros, sem depender de ferramentas pesadas ou configurações complexas.
+**Rhyla Documentation** is a simple and flexible tool to quickly create and organize documentation using **Markdown** files and customizable templates.  
+The main idea is to allow developers to keep all project documentation organized, navigable, and with support for light and dark themes, without relying on heavy tools or complex configurations.
 
 ---
 
-## 🚀 Motivações
-- Facilitar a criação de documentações locais e estáticas.
-- Usar **Markdown** para que o conteúdo seja fácil de escrever e manter.
-- Permitir customização total de **header**, **footer**, **sidebar** e **temas**.
-- Ter um fluxo simples de desenvolvimento (`rhyla dev`) e geração (`rhyla build`).
+## 🚀 Motivation
+- Make it easy to create local and static documentation.
+- Use **Markdown** so content is easy to write and maintain.
+- Allow full customization of **header**, **footer**, **sidebar**, and **themes**.
+- Provide a simple development (`rhyla dev`) and build (`rhyla build`) workflow.
 
 ---
 
-## 🛠 Uso básico
-1. Instale o projeto globalmente ou use via CLI local.
-2. Execute:
+## 🛠 Basic Usage
+1. Install the project globally or use it via local CLI.
+2. Run:
    ```bash
    rhyla init
-    ```
-Isso criará a estrutura inicial com:
+   ```
+This will create the initial structure with:
 - header.html
 - footer.html
 - config.yaml
-- home.md (esta página)
-- Pasta body para os tópicos
+- home.md (this page)
+- body folder for your topics
 
-3. Durante o desenvolvimento, use:
+3. During development, use:
    ```bash
    rhyla dev
    ```
-Isso iniciará um servidor local em `http://localhost:3000` para pré-visualização.
+This will start a local server at `http://localhost:3000` for preview.
 
-4. Para gerar a documentação estática, use:
+4. To generate static documentation, use:
    ```bash
    rhyla build
    ```
-Isso criará a pasta `rhyla/` com os arquivos HTML gerados.
+This will create the `rhyla/` folder with the generated HTML files.
 
 ---
 
-## ✏️ Comece personalizando!
-A primeira ação recomendada é adaptar este `home.md` para o contexto do seu projeto.
+## ✏️ Start customizing!
+The first recommended action is to adapt this `home.md` to your project's context.
 
-### Como a navegação é formada
-A sidebar é construída automaticamente a partir da árvore de diretórios dentro de `rhyla/body/`:
-- Cada PASTA dentro de `body/` funciona como um GRUPO / CATEGORIA.
-- Cada ARQUIVO `.md` vira uma página processada (Markdown → HTML).
-- Cada ARQUIVO `.html` é incluído como está (útil para páginas altamente customizadas).
-- O caminho do arquivo define a rota. Ex: `rhyla/body/guias/instalacao.md` → rota `/guias/instalacao`.
-- A ordem padrão é alfabética (nomes de pastas e arquivos). Use nomes claros e consistentes.
+### How navigation is built
+The sidebar is automatically generated from the directory tree inside `rhyla/body/`:
+- Each FOLDER inside `body/` works as a GROUP / CATEGORY.
+- Each `.md` FILE becomes a processed page (Markdown → HTML).
+- Each `.html` FILE is included as-is (useful for highly customized pages).
+- The file path defines the route. Example: `rhyla/body/guides/install.md` → route `/guides/install`.
+- The default order is alphabetical (folder and file names). Use clear and consistent names.
 
-### Criando grupos e tópicos
-Estrutura de exemplo:
+### Creating groups and topics
+Example structure:
 ```
 rhyla/
   body/
-    introducao.md
-    guiadeuso.md
-    guia/
-      instalacao.md
-      configuracao.md
+    introduction.md
+    quickstart.md
+    guide/
+      install.md
+      config.md
     api/
-      autenticacao.md
-      usuarios.html
+      auth.md
+      users.html
 ```
-Rotas geradas:
+Generated routes:
 ```
-/introducao
-/guiadeuso
-/guia/instalacao
-/guia/configuracao
-/api/autenticacao
-/api/usuarios
+/introduction
+/quickstart
+/guide/install
+/guide/config
+/api/auth
+/api/users
 ```
 
-### Boas práticas de nomes
-- Use letras minúsculas e hifens ou nada: `instalacao-avancada.md` ou `instalacaoAvancada.md`.
-- Evite espaços e caracteres especiais.
-- Escolha nomes curtos, descritivos e estáveis.
+### Naming best practices
+- Use lowercase and hyphens or camelCase: `advanced-install.md` or `advancedInstall.md`.
+- Avoid spaces and special characters.
+- Choose short, descriptive, and stable names.
 
-### Quando usar .md ou .html
-| Situação | Use .md | Use .html |
-|----------|--------|-----------|
-| Texto comum, documentação narrativa | ✅ | |
-| Código com formatação simples | ✅ | |
-| Layout totalmente customizado | | ✅ |
-| Componentes HTML prontos | | ✅ |
+### When to use .md or .html
+| Situation | Use .md | Use .html |
+|-----------|---------|-----------|
+| Common text, narrative docs | ✅ | |
+| Code with simple formatting | ✅ | |
+| Fully custom layout | | ✅ |
+| Ready-made HTML components | | ✅ |
 
-### Dicas extras
-- Comece simples: crie só alguns arquivos `.md` e verifique a navegação.
-- Se precisar de uma página especial (landing interna), crie um `.html` naquela pasta.
-- Reestruturar? Apenas mova/renomeie pastas/arquivos e reinicie o servidor (ou recarregue) para refletir.
+### Extra tips
+- Start simple: create just a few `.md` files and check the navigation.
+- Need a special page (internal landing)? Create a `.html` in that folder.
+- Restructuring? Just move/rename folders/files and restart the server (or reload) to reflect changes.
 
 --- 
 
-## ⚠️ Limitações
-- Navegação e estrutura dependem do uso de arquivos .md ou .html.
+## ⚠️ Limitations
+- Navigation and structure depend on using .md or .html files.
+- The sidebar is generated based on the folder structure, so folder and file names define groups and topics.
+- The system does not automatically process external links in the menu.
+- For global layout changes, you need to edit header.html, footer.html, and theme styles.
+- No plugin or extension support at the moment.
 
-- A sidebar é gerada com base na estrutura de pastas, portanto nomes de pastas e arquivos definem grupos e tópicos.
-- O sistema não processa links externos automaticamente no menu.
-- Para mudanças no layout global, é necessário alterar os arquivos header.html, footer.html e os estilos de tema.
-- Não há suporte a plugins ou extensões no momento.
+---
+
+## 🔎 About Search and Indexing
+- All documentation pages (`.md` and `.html`) are automatically indexed and used in the search page (`/buscar`).
+- The search system relies on this index to provide fast and relevant results.
+- For correct operation, **do not delete or rename the search page** (`search.html` in `rhyla/body`).
+- The `home.md` file is required and must not be deleted, as it is the main entry page of your documentation. You should edit it to fit your project, but never remove it.
+
+---
+
+## Contributing
+Contributions are welcome! Feel free to open issues or submit pull requests on the [GitHub repository](https://github.com/joseRibamar21/rhyla_documentation).
+
+<div align="left">
+  <a href="https://github.com/joseRibamar21" target="_blank">
+    <img src="https://github.com/joseRibamar21.png" width="64" height="64" alt="joseRibamar21" style="border-radius:50%;margin-top:8px;" />
+  </a>
+</div>
 
 --- 
 
-## 📄 Licença
-Este projeto está licenciado sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
+## 📄 License
+This project is licensed under the MIT License. See the LICENSE file for more details.
 
 --- 
 
-## 🔗 Link do projeto
+## 🔗 Project link
 [https://github.com/joseRibamar21/rhyla_documentation](https://github.com/joseRibamar21/rhyla_documentation)
