@@ -10,6 +10,17 @@
   --rh-table-border: #1e2a35;
 }
 
+::-webkit-scrollbar {
+  width: 8px;
+  background: #181818;
+}
+::-webkit-scrollbar-thumb {
+  background: #444;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
 
 th, td {
   padding: 8px 12px;
