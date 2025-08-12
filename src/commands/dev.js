@@ -67,21 +67,6 @@ export default function dev() {
   const header = fs.readFileSync(path.join(rhylaPath, "header.html"), "utf8");
   const footer = fs.readFileSync(path.join(rhylaPath, "footer.html"), "utf8");
 
-  // Página de busca renderizada com layout padrão, usando body/search.html ou body/.search.html
-  app.get("/buscar", (req, res) => {
-    const searchVisible = path.join(rhylaPath, "body", "search.html");
-    const searchHidden = path.join(rhylaPath, "body", ".search.html");
-    const searchPage = fs.existsSync(searchVisible)
-      ? searchVisible
-      : (fs.existsSync(searchHidden) ? searchHidden : null);
-
-    if (!searchPage) return res.redirect("/");
-
-    const content = fs.readFileSync(searchPage, "utf8");
-    const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, null);
-    res.send(header + sidebar + `<main class="rhyla-main">${content}</main>` );
-  });
-
   // Home
   app.get("/", (req, res) => {
     const homePath = path.join(rhylaPath, "body", "home.md");

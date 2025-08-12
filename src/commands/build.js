@@ -136,7 +136,7 @@ export default function build() {
 
   processDir(bodyPath);
 
-  // Página de busca estática em /buscar (suporta search.html e .search.html)
+  // Página de busca (suporta search.html e .search.html)
   const searchVisible = path.join(bodyPath, 'search.html');
   const searchHidden = path.join(bodyPath, '.search.html');
   const searchPage = fs.existsSync(searchVisible)

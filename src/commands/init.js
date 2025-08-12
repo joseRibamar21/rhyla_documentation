@@ -70,8 +70,8 @@ export default function init() {
   // Copiar notFound.html
   fs.copyFileSync(path.join(templatesPath, 'notFound.html'), path.join(rhylaPath, 'body', 'notFound.html'));
 
-  // Copiar config.yaml
-  fs.copyFileSync(path.join(templatesPath, 'config.yaml'), path.join(rhylaPath, 'config.yaml'));
+  // Copiar config.json
+  fs.copyFileSync(path.join(templatesPath, 'config.json'), path.join(rhylaPath, 'config.json'));
   
   // Copiar estilos
   fs.cpSync(path.join(templatesPath, 'styles'), path.join(rhylaPath, 'styles'), { recursive: true });
