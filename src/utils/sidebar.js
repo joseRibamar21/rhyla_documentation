@@ -13,20 +13,28 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       const full = path.join(bodyPath, name);
       return fs.statSync(full).isFile() && /\.(md|html)$/i.test(name);
     })
-    .filter(name => !['home.md','home.html','notfound.md','notfound.html','notfound.html','notFound.html'].includes(name.toLowerCase()))
+    .filter(name => !['home.md','home.html','notfound.md','notfound.html'].includes(name.toLowerCase()))
     .map(f => path.basename(f, path.extname(f)));
 
   let html = `<aside class="rhyla-sidebar"><ul>`;
 
-  // Home
+  // 🔍 Search primeiro
+  const hasSearch = rootTopics.includes('search');
+  if (hasSearch) {
+    const isActiveSearch = !activeGroup && activeTopic === 'search';
+    html += `<li class="${isActiveSearch ? 'active' : ''}"><a href="/search.html">🔍 Search</a></li>`;
+    // Divider
+    html += `<li><hr style="border:none; border-top:1px solid #ccc; margin:8px 0;"></li>`;
+  }
+
+  // 🏠 Home
   html += `<li class="${activeTopic === 'home' ? 'active' : ''}"><a href="/">🏠 Home</a></li>`;
 
-  // Páginas raiz
+  // Páginas raiz (exceto Search e Home)
   for (const topic of rootTopics.sort()) {
+    if (topic.toLowerCase() === 'search' || topic.toLowerCase() === 'home') continue;
     const isActive = !activeGroup && activeTopic === topic;
-    let icon = '📄';
-    if (topic.toLowerCase() === 'search') icon = '🔍';
-    html += `<li class="${isActive ? 'active' : ''}"><a href="/${topic}.html">${icon} Search</a></li>`;
+    html += `<li class="${isActive ? 'active' : ''}"><a href="/${topic}.html">📄 ${topic}</a></li>`;
   }
 
   // Pastas / grupos com colapso

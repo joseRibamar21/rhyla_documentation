@@ -127,9 +127,14 @@ export default function build() {
 
   processDir(bodyPath);
 
-  // Página de busca estática em /buscar
-  const searchPage = path.join(bodyPath, 'search.html');
-  if (fs.existsSync(searchPage)) {
+  // Página de busca estática em /buscar (suporta search.html e .search.html)
+  const searchVisible = path.join(bodyPath, 'search.html');
+  const searchHidden = path.join(bodyPath, '.search.html');
+  const searchPage = fs.existsSync(searchVisible)
+    ? searchVisible
+    : (fs.existsSync(searchHidden) ? searchHidden : null);
+
+  if (searchPage) {
     const content = fs.readFileSync(searchPage, 'utf8');
     const sidebar = generateSidebarHTML(bodyPath, null, null);
     const outDir = path.join(distPath, 'buscar');
