@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Buscar na Documentação</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    input { width: 100%; padding: 10px; font-size: 16px; }
+    .result { border-bottom: 1px solid #ccc; padding: 10px 0; }
+    .result a { font-weight: bold; text-decoration: none; color: blue; }
+    .snippet { font-size: 14px; color: #555; }
+    mark { background: yellow; }
+  </style>
+</head>
+<body>
+  <h1>Buscar</h1>
+  <input id="searchBox" type="text" placeholder="Digite para buscar...">
+  <div id="results"></div>
+
+  <script>
+    let index = [];
+    const resultsDiv = document.getElementById("results");
+    const searchBox = document.getElementById("searchBox");
+
+    // Usar caminho absoluto para evitar /buscar/search_index.json
+    fetch("/search_index.json")
+      .then(res => res.json())
+      .then(data => { index = data; });
+
+    function highlight(text, query) {
+      const regex = new RegExp(`(${query})`, "gi");
+      return text.replace(regex, "<mark>$1</mark>");
+    }
+
+    function toHref(p) {
+      const lower = p.toLowerCase();
+      if (lower === 'home.md' || lower === 'home.html') return '/';
+      // trocar .md por .html
+      let clean = p.replace(/\.md$/i, '.html');
+      // garantir prefixo raiz
+      if (!clean.startsWith('/')) clean = '/' + clean;
+      return clean;
+    }
+
+    function toLabel(p) {
+      return p.replace(/\.(md|html)$/i, '');
+    }
+
+    function search(query) {
+      if (!query) {
+        resultsDiv.innerHTML = "";
+        return;
+      }
+      const results = [];
+      index.forEach(page => {
+        const matchIndex = page.content.toLowerCase().indexOf(query.toLowerCase());
+        if (matchIndex !== -1) {
+          const snippet = page.content.slice(Math.max(0, matchIndex - 40), matchIndex + 40);
+          results.push({
+            path: page.path,
+            href: toHref(page.path),
+            label: toLabel(page.path),
+            snippet: highlight(snippet, query)
+          });
+        }
+      });
+      displayResults(results);
+    }
+
+    function displayResults(results) {
+      resultsDiv.innerHTML = "";
+      if (results.length === 0) {
+        resultsDiv.innerHTML = "<p>Nenhum resultado encontrado.</p>";
+        return;
+      }
+      results.forEach(r => {
+        const div = document.createElement("div");
+        div.className = "result";
+        div.innerHTML = `<a href="${r.href}">${r.label}</a><div class="snippet">... ${r.snippet} ...</div>`;
+        resultsDiv.appendChild(div);
+      });
+    }
+
+    searchBox.addEventListener("input", e => {
+      search(e.target.value);
+    });
+  </script>
+</body>
+</html>

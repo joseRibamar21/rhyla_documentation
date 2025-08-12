@@ -23,8 +23,9 @@ export default function init() {
   // Copiar arquivos HTML base
   fs.copyFileSync(path.join(templatesPath, 'header.html'), path.join(rhylaPath, 'header.html'));
   fs.copyFileSync(path.join(templatesPath, 'footer.html'), path.join(rhylaPath, 'footer.html'));
-
+  
   // Copiar home para body
+  fs.copyFileSync(path.join(templatesPath, 'search.html'), path.join(rhylaPath, 'body', 'search.html'));
   fs.copyFileSync(path.join(templatesPath, 'home.md'), path.join(rhylaPath, 'body', 'home.md'));
 
   // Copiar notFound para body
@@ -35,6 +36,14 @@ export default function init() {
   
   // Copiar estilos
   fs.cpSync(path.join(templatesPath, 'styles'), path.join(rhylaPath, 'styles'), { recursive: true });
+
+  // Copiar script de índice de busca (só se existir)
+  const searchScriptSrc = path.join(templatesPath, 'scripts', 'generateSearchIndex.js');
+  const searchScriptDest = path.join(rhylaPath, 'scripts', 'generateSearchIndex.js');
+  if (fs.existsSync(searchScriptSrc)) {
+    fs.mkdirSync(path.dirname(searchScriptDest), { recursive: true });
+    fs.copyFileSync(searchScriptSrc, searchScriptDest);
+  }
 
   console.log('✅ Projeto inicializado com sucesso.');
 }
