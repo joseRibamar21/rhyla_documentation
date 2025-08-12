@@ -30,6 +30,14 @@ export default function build() {
   fs.mkdirSync(path.join(distPath, 'styles'), { recursive: true });
   fs.cpSync(path.join(rhylaPath, 'styles'), path.join(distPath, 'styles'), { recursive: true });
 
+  // Copiar assets públicos do usuário (imagens, fontes, logo, etc.)
+  const publicSrc = path.join(rhylaPath, 'public');
+  const publicDst = path.join(distPath, 'public');
+  if (fs.existsSync(publicSrc)) {
+    fs.mkdirSync(publicDst, { recursive: true });
+    fs.cpSync(publicSrc, publicDst, { recursive: true });
+  }
+
   // Pasta de scripts agora é templates/scripts
   const scriptsSrc = path.join(templatesPath, 'scripts');
   const searchScript = path.join(scriptsSrc, 'generateSearchIndex.js');

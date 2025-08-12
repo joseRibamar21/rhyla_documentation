@@ -53,6 +53,8 @@ export default function dev() {
 
   // Estáticos
   app.use("/styles", express.static(path.join(rhylaPath, "styles")));
+  // Servir assets públicos do usuário (imagens, fontes, etc.)
+  app.use("/public", express.static(path.join(rhylaPath, "public")));
   app.use("/scripts", express.static(scriptsFolderPath));
 
   // Servir o índice gerado (em src/templates/scripts/search_index.json)

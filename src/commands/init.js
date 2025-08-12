@@ -58,6 +58,7 @@ export default function init() {
   fs.mkdirSync(rhylaPath, { recursive: true });
   fs.mkdirSync(path.join(rhylaPath, 'body'), { recursive: true });
   fs.mkdirSync(path.join(rhylaPath, 'styles'), { recursive: true });
+  fs.mkdirSync(path.join(rhylaPath, 'public'), { recursive: true });
 
   // Copiar header e footer
   fs.copyFileSync(path.join(templatesPath, 'header.html'), path.join(rhylaPath, 'header.html'));
@@ -74,6 +75,19 @@ export default function init() {
   
   // Copiar estilos
   fs.cpSync(path.join(templatesPath, 'styles'), path.join(rhylaPath, 'styles'), { recursive: true });
+
+  // Copiar public (inclui logo.png se existir)
+  const publicTpl = path.join(templatesPath, 'public');
+  const publicDst = path.join(rhylaPath, 'public');
+  if (fs.existsSync(publicTpl)) {
+    fs.cpSync(publicTpl, publicDst, { recursive: true });
+  } else {
+    // Se não existir no template, criar um placeholder de logo
+    const logoDst = path.join(publicDst, 'logo.png');
+    if (!fs.existsSync(logoDst)) {
+      fs.writeFileSync(logoDst, '');
+    }
+  }
 
   // Não criamos mais scripts dentro de rhyla; manipulados em src/templates/scripts
 
