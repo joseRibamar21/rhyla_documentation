@@ -78,6 +78,17 @@ export default function dev() {
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 
+  // Página de busca com suporte a arquivo oculto (.search.html)
+  app.get("/search", (req, res, next) => {
+    const visible = path.join(rhylaPath, "body", "search.html");
+    const hidden = path.join(rhylaPath, "body", ".search.html");
+    const htmlPath = fs.existsSync(visible) ? visible : (fs.existsSync(hidden) ? hidden : null);
+    if (!htmlPath) return next();
+    const content = fs.readFileSync(htmlPath, "utf8");
+    const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, null);
+    res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
+  });
+
   // Arquivos root .html
   app.get("/:topic.html", (req, res, next) => {
     const { topic } = req.params;
@@ -96,7 +107,7 @@ export default function dev() {
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 
-  // Arquivos root sem extensão
+  // Arquivos root sem extensão (URLs limpas)
   app.get("/:topic", (req, res, next) => {
     const { topic } = req.params;
     if (topic.includes(".") || topic === "styles" || topic === "search_index") return next();
@@ -114,8 +125,8 @@ export default function dev() {
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 
-  // Páginas em subpastas
-  app.get("/:group/:topic.html", (req, res) => {
+  // Páginas em subpastas com .html
+  app.get("/:group/:topic.html", (req, res, next) => {
     const { group, topic } = req.params;
     const fileMd = path.join(rhylaPath, "body", group, `${topic}.md`);
     const fileHtml = path.join(rhylaPath, "body", group, `${topic}.html`);
@@ -125,25 +136,29 @@ export default function dev() {
     } else if (fs.existsSync(fileHtml)) {
       content = fs.readFileSync(fileHtml, "utf8");
     } else {
-      const notFound = fs.existsSync(notFoundPath) ? fs.readFileSync(notFoundPath, "utf8") : "<h1>404</h1>";
-      const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), group, null);
-      return res.status(404).send(header + sidebar + `<main class="rhyla-main">${notFound}</main>`);
+      return next();
     }
     const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), group, topic);
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 
-  // Rota para servir config.json
-  app.get("/config.json", (req, res) => {
-    const configPath = path.join(rhylaPath, "config.json");
-    if (!fs.existsSync(configPath)) return res.status(404).json({});
-    try {
-      const txt = fs.readFileSync(configPath, "utf8");
-      const config = JSON.parse(txt);
-      res.json(config);
-    } catch (e) {
-      res.status(500).json({ error: "Invalid config.json" });
+  // Páginas em subpastas sem .html (URLs limpas)
+  app.get("/:group/:topic", (req, res, next) => {
+    const { group, topic } = req.params;
+    if (group === "styles" || group === "scripts") return next();
+    if (topic.includes(".")) return next();
+    const fileMd = path.join(rhylaPath, "body", group, `${topic}.md`);
+    const fileHtml = path.join(rhylaPath, "body", group, `${topic}.html`);
+    let content = "";
+    if (fs.existsSync(fileMd)) {
+      content = md.render(fs.readFileSync(fileMd, "utf8"));
+    } else if (fs.existsSync(fileHtml)) {
+      content = fs.readFileSync(fileHtml, "utf8");
+    } else {
+      return next();
     }
+    const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), group, topic);
+    res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 
   // 404 final

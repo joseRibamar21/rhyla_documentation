@@ -2,3 +2,6 @@ node_modules
 rhyla
 dist
 build
+
+src/templates/scripts/search_index.js
+src/templates/scripts/search_index.json
