@@ -26,7 +26,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     const isActive = !activeGroup && activeTopic === topic;
     let icon = '📄';
     if (topic.toLowerCase() === 'search') icon = '🔍';
-    html += `<li class="${isActive ? 'active' : ''}"><a href="/${topic}.html">${icon} ${topic}</a></li>`;
+    html += `<li class="${isActive ? 'active' : ''}"><a href="/${topic}.html">${icon} Search</a></li>`;
   }
 
   // Pastas / grupos com colapso
