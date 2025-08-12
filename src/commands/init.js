@@ -10,8 +10,8 @@ const __dirname = path.dirname(__filename);
 function createHiddenFolder(baseDir, folderName) {
   const isWindows = os.platform() === 'win32';
   const folderPath = isWindows
-    ? path.join(baseDir, folderName) // no Windows, nome normal
-    : path.join(baseDir, `.${folderName}`); // no Unix, prefixo com ponto
+    ? path.join(baseDir, folderName)
+    : path.join(baseDir, `.${folderName}`);
 
   if (!fs.existsSync(folderPath)) {
     fs.mkdirSync(folderPath, { recursive: true });
@@ -35,7 +35,6 @@ function createHiddenFile(filePath) {
   }
 
   if (isWindows) {
-    // no Windows, cria e depois oculta
     fs.copyFileSync(filePath, hiddenPath);
     spawn('attrib', ['+h', hiddenPath], { shell: true });
   } else {
@@ -76,17 +75,13 @@ export default function init() {
   // Copiar estilos
   fs.cpSync(path.join(templatesPath, 'styles'), path.join(rhylaPath, 'styles'), { recursive: true });
 
-  // Criar pasta scripts oculta e copiar generateSearchIndex.js
-  const scriptsFolder = createHiddenFolder(rhylaPath, 'scripts');
-  const searchScriptSrc = path.join(templatesPath, 'scripts', 'generateSearchIndex.js');
-  if (fs.existsSync(searchScriptSrc)) {
-    fs.copyFileSync(searchScriptSrc, path.join(scriptsFolder, 'generateSearchIndex.js'));
-  }
-  
+  // Não criamos mais scripts dentro de rhyla; manipulados em src/templates/scripts
+
+  // Copiar search.html (visível)
   const searchHtmlSrc = path.join(templatesPath, 'search.html');
   if (fs.existsSync(searchHtmlSrc)) {
     fs.copyFileSync(searchHtmlSrc, path.join(rhylaPath, 'body', 'search.html'));
   }
 
-  console.log('✅ Projeto inicializado com sucesso (arquivos sensíveis ocultos).');
+  console.log('✅ Projeto inicializado com sucesso.');
 }

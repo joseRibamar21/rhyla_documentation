@@ -209,15 +209,10 @@
       return text.replace(regex, '<mark>$1</mark>');
     }
 
-    function toHref(p) {
-      const lower = p.toLowerCase();
-      if (lower === 'home.md' || lower === 'home.html') return '/';
-      let clean = p.replace(/\.md$/i, '.html');
-      if (!clean.startsWith('/')) clean = '/' + clean;
-      return clean;
+    function formatLabel(page) {
+      if (page.title && page.title.trim()) return page.title;
+      return (page.route || '').replace(/^\//, '') || 'Untitled';
     }
-
-    function toLabel(p) { return p.replace(/\.(md|html)$/i, ''); }
 
     function search(query) {
       const q = query.trim();
@@ -225,11 +220,19 @@
       const results = [];
       const ql = q.toLowerCase();
       index.forEach(page => {
-        const hay = page.content.toLowerCase();
+        if (!page || !page.content) return;
+        const hay = String(page.content).toLowerCase();
         const matchIndex = hay.indexOf(ql);
         if (matchIndex !== -1) {
-          const snippet = page.content.slice(Math.max(0, matchIndex - 40), matchIndex + 40);
-          results.push({ path: page.path, href: toHref(page.path), label: toLabel(page.path), snippet: highlight(snippet, q) });
+          const snippetRaw = String(page.content);
+          const start = Math.max(0, matchIndex - 40);
+          const end = Math.min(snippetRaw.length, matchIndex + 40);
+          const snippet = snippetRaw.slice(start, end);
+          results.push({
+            route: page.route || '#',
+            label: formatLabel(page),
+            snippet: highlight(snippet, q)
+          });
         }
       });
       displayResults(results);
@@ -243,7 +246,7 @@
         const div = document.createElement('div');
         div.className = 'result';
         div.style.setProperty('--delay', (i * 0.02) + 's');
-        div.innerHTML = `<a href="${r.href}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
+        div.innerHTML = `<a href="${r.route}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
         resultsDiv.appendChild(div);
       });
     }

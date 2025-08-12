@@ -1,62 +1,95 @@
-import { readFileSync, writeFileSync } from "fs";
-import { resolve, relative, dirname } from "path";
-import { sync } from "glob";
-import matter from "gray-matter";
-import { fileURLToPath } from "url";
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
-// Arquivos a ignorar na indexação
-const IGNORE = [
-  'notFound.html', 'notfound.md', 'notfound.htm', 'notFound.html',
-  '404.html', '404.md', '404.htm',
-  'header.html', 'footer.html', 'config.yaml', 'search.html',
-];
+function walk(dir) {
+  const out = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walk(p));
+    else out.push(p);
+  }
+  return out;
+}
 
 function stripHtml(html) {
-  return html.replace(/<[^>]+>/g, " "); // remove tags
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;|&amp;|&lt;|&gt;|&quot;|&#39;/g, ' ');
 }
 
-function getSnippet(text, matchIndex, length = 80) {
-  const start = Math.max(0, matchIndex - length / 2);
-  const end = Math.min(text.length, matchIndex + length / 2);
-  return text.slice(start, end).trim();
+function stripMarkdown(md) {
+  return md
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/`[^`]*`/g, ' ')
+    .replace(/!\[[^\]]*\]\([^\)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]\([^\)]*\)/g, (_m) => ' ')
+    .replace(/^>\s?/gm, '')
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/[*_~`>#-]/g, ' ');
 }
 
-function buildSearchIndex() {
-  const srcDir = resolve(process.cwd(), "body");
-  const files = sync(`${srcDir}/**/*.{md,html}`);
+function firstHeading(htmlOrMd) {
+  const h1 = htmlOrMd.match(/^#\s+(.+)$/m) || htmlOrMd.match(/^<h1[^>]*>(.*?)<\/h1>/i);
+  if (!h1) return null;
+  const val = Array.isArray(h1) ? (h1[1] || h1[0]) : h1;
+  return String(val).replace(/<[^>]+>/g, '').trim();
+}
 
-  const index = files
-    .filter(filePath => !IGNORE.includes(filePath.split('/').pop().toLowerCase()))
-    .map(filePath => {
-      const raw = readFileSync(filePath, "-utf-8".slice(1));
-      let content = filePath.endsWith(".html") ? stripHtml(raw) : matter(raw).content;
-      content = content.replace(/\s+/g, " "); // normaliza espaços
+async function main() {
+  const cwd = process.cwd();
+  const bodyDir = path.join(cwd, 'body');
+  if (!fs.existsSync(bodyDir)) {
+    console.error('Body folder not found:', bodyDir);
+    process.exit(0);
+  }
 
+  const IGNORE = new Set([
+    'notfound', 'notfound.html', 'notfound.md', '404.html', '404.md',
+    'header.html', 'footer.html', 'config.yaml', 'config.json',
+    'index.html', 'index.md', 'search.html', '.search.html'
+  ]);
+
+  const files = walk(bodyDir).filter(f => /\.(md|html)$/i.test(f));
+
+  const entries = files
+    .filter(f => !IGNORE.has(path.basename(f).toLowerCase()))
+    .map(file => {
+      const rel = path.relative(bodyDir, file);
+      const ext = path.extname(file).toLowerCase();
+      const route = '/' + rel.replace(/\\/g, '/').replace(/\.(md|html)$/i, '');
+      const raw = fs.readFileSync(file, 'utf8');
+      let text = '';
+      let title = '';
+      if (ext === '.html') {
+        title = firstHeading(raw) || path.basename(file, ext);
+        text = stripHtml(raw);
+      } else {
+        title = firstHeading(raw) || path.basename(file, ext);
+        text = stripMarkdown(raw);
+      }
       return {
-        path: relative(srcDir, filePath),
-        content
+        route: route === '/home' ? '/' : route,
+        title: title.trim(),
+        content: text.replace(/\s+/g, ' ').trim()
       };
     });
 
-  // JSON (opcional, pode ser útil para integrações)
-  writeFileSync(
-    resolve(__dirname, "search_index.json"),
-    JSON.stringify(index, null, 2),
-    "utf-8"
-  );
+  const outJson = path.join(__dirname, 'search_index.json');
+  fs.writeFileSync(outJson, JSON.stringify(entries, null, 2), 'utf8');
 
-  // JS para uso direto no browser, sem rota
-  const jsBundle = `window.__SEARCH_INDEX__ = ${JSON.stringify(index)};`;
-  writeFileSync(
-    resolve(__dirname, "search_index.js"),
-    jsBundle,
-    "utf-8"
-  );
+  const outJs = path.join(__dirname, 'search_index.js');
+  fs.writeFileSync(outJs, `window.__SEARCH_INDEX__ = ${JSON.stringify(entries)};`, 'utf8');
 
-  console.log(`✅ Índice de busca gerado com ${index.length} páginas`);
+  console.log(`Search index generated: ${entries.length} entries`);
 }
 
-buildSearchIndex();
+main().catch(err => {
+  console.error(err);
+  process.exit(1);
+});

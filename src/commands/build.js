@@ -3,12 +3,17 @@ import path from 'path';
 import markdownIt from 'markdown-it';
 import { generateSidebarHTML } from '../utils/sidebar.js';
 import { spawnSync } from 'child_process';
-import os from 'os';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export default function build() {
   const root = process.cwd();
   const rhylaPath = path.join(root, 'rhyla');
   const distPath = path.join(root, 'dist');
+  // Corrige para src/templates (relativo a src/commands)
+  const templatesPath = path.join(__dirname, '../templates');
 
   if (!fs.existsSync(rhylaPath)) {
     console.error('❌ Pasta "rhyla" não encontrada. Execute "rhyla init" primeiro.');
@@ -25,13 +30,11 @@ export default function build() {
   fs.mkdirSync(path.join(distPath, 'styles'), { recursive: true });
   fs.cpSync(path.join(rhylaPath, 'styles'), path.join(distPath, 'styles'), { recursive: true });
 
-  // Detectar pasta de scripts (oculta no Unix)
-  const isWindows = os.platform() === 'win32';
-  const scriptsFolderName = isWindows ? 'scripts' : '.scripts';
-  const scriptsFolderPath = path.join(rhylaPath, scriptsFolderName);
+  // Pasta de scripts agora é templates/scripts
+  const scriptsSrc = path.join(templatesPath, 'scripts');
+  const searchScript = path.join(scriptsSrc, 'generateSearchIndex.js');
 
-  // Gerar índice de busca (usa o script do projeto)
-  const searchScript = path.join(scriptsFolderPath, 'generateSearchIndex.js');
+  // Gerar índice de busca
   if (fs.existsSync(searchScript)) {
     console.log('🔍 Gerando índice de busca...');
     const res = spawnSync(process.execPath, [searchScript], { cwd: rhylaPath, stdio: 'inherit' });
@@ -40,18 +43,18 @@ export default function build() {
     }
   }
 
-  // Copiar scripts (inclui search_index.js/json se existirem)
-  const scriptsDst = path.join(distPath, 'scripts');
-  if (fs.existsSync(scriptsFolderPath)) {
-    fs.mkdirSync(scriptsDst, { recursive: true });
-    fs.cpSync(scriptsFolderPath, scriptsDst, { recursive: true });
-  }
-
   // Copiar o JSON do índice também para a raiz do dist (compat)
-  const searchJsonSrc = path.join(scriptsFolderPath, 'search_index.json');
+  const searchJsonSrc = path.join(scriptsSrc, 'search_index.json');
   const searchJsonDst = path.join(distPath, 'search_index.json');
   if (fs.existsSync(searchJsonSrc)) {
     fs.copyFileSync(searchJsonSrc, searchJsonDst);
+  }
+
+  // Copiar config.json para dist, para o header funcionar no build estático
+  const cfgSrc = path.join(rhylaPath, 'config.json');
+  const cfgDst = path.join(distPath, 'config.json');
+  if (fs.existsSync(cfgSrc)) {
+    fs.copyFileSync(cfgSrc, cfgDst);
   }
 
   // Ler header/footer e notFound da pasta rhyla/body
@@ -144,11 +147,56 @@ export default function build() {
     : (fs.existsSync(searchHidden) ? searchHidden : null);
 
   if (searchPage) {
-    const content = fs.readFileSync(searchPage, 'utf8');
+    let content = fs.readFileSync(searchPage, 'utf8');
     const sidebar = generateSidebarHTML(bodyPath, null, null);
-    const outDir = path.join(distPath, 'buscar');
+    const outDir = path.join(distPath, 'search');
     fs.mkdirSync(outDir, { recursive: true });
-    fs.writeFileSync(path.join(outDir, 'index.html'), header + sidebar + `<main class=\"rhyla-main\">${content}</main>`);
+
+    // Copiar índices para dentro de dist/search
+    const searchIndexJsonSrc = path.join(scriptsSrc, 'search_index.json');
+    const searchIndexJsSrc = path.join(scriptsSrc, 'search_index.js');
+    if (fs.existsSync(searchIndexJsonSrc)) {
+      fs.copyFileSync(searchIndexJsonSrc, path.join(outDir, 'search_index.json'));
+    }
+    if (fs.existsSync(searchIndexJsSrc)) {
+      fs.copyFileSync(searchIndexJsSrc, path.join(outDir, 'search_index.js'));
+    }
+
+    // Manter apenas conteúdo do body + estilos, evitando HTML/HEAD/BODY aninhado
+    const styleTags = [];
+    content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, (m) => { styleTags.push(m); return ''; });
+    const bodyMatch = content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    let pageInner = bodyMatch ? bodyMatch[1] : content;
+    let normalized = `${styleTags.join('\n')}\n${pageInner}`;
+
+    // Extrair script inline para script_search.js e ajustar fetch para URL robusta e DOMContentLoaded + fallback
+    const scriptMatch = normalized.match(/<script\b[^>]*>([\s\S]*?)<\/script>/i);
+    if (scriptMatch) {
+      let scriptCode = scriptMatch[1];
+      // Computa URL robusta para /search e /search/
+      const urlPrelude = `const __basePath = (location.pathname.endsWith('/') ? location.pathname : location.pathname + '/');\nconst __searchIndexUrl = __basePath + 'search_index.json';\n`;
+      // Substitui quaisquer formas conhecidas de fetch do índice
+      scriptCode = scriptCode
+        .replace(/fetch\(\s*(['\"])\.?\/?search_index\.json\1\s*\)/g, 'fetch(__searchIndexUrl)')
+        .replace(/fetch\(\s*(['\"])\/search_index\.json\1\s*\)/g, 'fetch(__searchIndexUrl)')
+        .replace(/fetch\(\s*(['\"])\/search\/search_index\.json\1\s*\)/g, 'fetch(__searchIndexUrl)');
+
+      // Injetar fallback logo após capturar meta
+      scriptCode = scriptCode.replace(
+        /(const\s+meta\s*=\s*document\.getElementById\(['\"]meta['\"]\)\s*;?)/,
+        `$1\n    if (Array.isArray(window.__SEARCH_INDEX__)) { index = window.__SEARCH_INDEX__; if (meta) { meta.textContent = (index.length ? index.length + ' páginas indexadas' : 'Nenhuma página indexada'); } }\n`
+      );
+
+      const wrapped = `(() => { const run = () => { ${urlPrelude}${scriptCode}\n }; if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', run); } else { run(); } })();`;
+      fs.writeFileSync(path.join(outDir, 'script_search.js'), wrapped, 'utf8');
+      // Usar caminhos absolutos para funcionar em /search e /search/
+      normalized = normalized.replace(scriptMatch[0], '<script src="/search/search_index.js"></script>\n<script src="/search/script_search.js"></script>');
+    }
+
+    // Ajustar também referências diretas no HTML, caso existam
+    normalized = normalized.replace(/\/search_index\.json/g, './search_index.json');
+
+    fs.writeFileSync(path.join(outDir, 'index.html'), header + sidebar + `<main class=\"rhyla-main\">${normalized}</main>`);
   }
 
   // 404 com sidebar

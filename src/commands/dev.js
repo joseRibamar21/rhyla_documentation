@@ -7,7 +7,6 @@ import spawn from "cross-spawn";
 import chokidar from "chokidar";
 import { fileURLToPath } from "url";
 import { generateSidebarHTML } from "../utils/sidebar.js";
-import yaml from "js-yaml";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,14 +16,13 @@ export default function dev() {
   const md = new markdownIt();
   const rhylaPath = path.join(process.cwd(), "rhyla");
 
-  const isWindows = os.platform() === "win32";
-  const scriptsFolderName = isWindows ? "scripts" : ".scripts";
-  const scriptsFolderPath = path.join(rhylaPath, scriptsFolderName);
+  // Scripts agora ficam em src/templates/scripts
+  const scriptsFolderPath = path.join(__dirname, "../templates/scripts");
   const searchScript = path.join(scriptsFolderPath, "generateSearchIndex.js");
 
   const notFoundPath = path.join(rhylaPath, "body", "notFound.html");
 
-  const searchFileName = isWindows ? "search.html" : ".search.html";
+  const searchFileName = os.platform() === "win32" ? "search.html" : ".search.html";
   const searchFilePath = path.join(rhylaPath, "body", searchFileName);
 
   if (!fs.existsSync(rhylaPath)) {
@@ -57,14 +55,14 @@ export default function dev() {
   app.use("/styles", express.static(path.join(rhylaPath, "styles")));
   app.use("/scripts", express.static(scriptsFolderPath));
 
-  // Servir o índice gerado
+  // Servir o índice gerado (em src/templates/scripts/search_index.json)
   app.get("/search_index.json", (req, res) => {
     const idxPath = path.join(scriptsFolderPath, "search_index.json");
     if (!fs.existsSync(idxPath)) return res.status(404).send("[]");
     res.sendFile(idxPath);
   });
 
-  // Ler header e footer
+  // Ler header
   const header = fs.readFileSync(path.join(rhylaPath, "header.html"), "utf8");
 
   // Home
@@ -135,13 +133,13 @@ export default function dev() {
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 
-  // Rota para servir config.yaml como /config.json
+  // Rota para servir config.json
   app.get("/config.json", (req, res) => {
     const configPath = path.join(rhylaPath, "config.json");
     if (!fs.existsSync(configPath)) return res.status(404).json({});
     try {
-      const yamlText = fs.readFileSync(configPath, "utf8");
-      const config = yaml.load(yamlText);
+      const txt = fs.readFileSync(configPath, "utf8");
+      const config = JSON.parse(txt);
       res.json(config);
     } catch (e) {
       res.status(500).json({ error: "Invalid config.json" });
