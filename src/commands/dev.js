@@ -9,7 +9,7 @@ export default function dev() {
   const md = new markdownIt();
   const rhylaPath = path.join(process.cwd(), 'rhyla');
   const templatesPath = path.join(process.cwd(), 'templates');
-  const notFoundPath = path.join(templatesPath, 'notFound.html');
+  const notFoundPath = path.join(rhylaPath, 'body', 'notFound.html');
 
   if (!fs.existsSync(rhylaPath)) {
     console.error('❌ Pasta "rhyla" não encontrada. Execute "rhyla init" primeiro.');

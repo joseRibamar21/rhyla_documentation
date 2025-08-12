@@ -27,7 +27,7 @@ export default function build() {
   // Ler header/footer
   const header = fs.readFileSync(path.join(rhylaPath, 'header.html'), 'utf8');
   const footer = fs.readFileSync(path.join(rhylaPath, 'footer.html'), 'utf8');
-  const notFoundTemplatePath = path.join(templatesPath, 'notFound.html');
+  const notFoundTemplatePath = path.join(rhylaPath, 'body', 'notFound.html');
   const notFoundHTML = fs.existsSync(notFoundTemplatePath)
     ? fs.readFileSync(notFoundTemplatePath, 'utf8')
     : '<h1>404</h1>';

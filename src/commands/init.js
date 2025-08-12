@@ -27,6 +27,12 @@ export default function init() {
   // Copiar home para body
   fs.copyFileSync(path.join(templatesPath, 'home.md'), path.join(rhylaPath, 'body', 'home.md'));
 
+  // Copiar notFound para body
+  fs.copyFileSync(path.join(templatesPath, 'notFound.html'), path.join(rhylaPath, 'body', 'notFound.html'));
+
+  // Copiar o config.yaml
+  fs.copyFileSync(path.join(templatesPath, 'config.yaml'), path.join(rhylaPath, 'config.yaml'));
+  
   // Copiar estilos
   fs.cpSync(path.join(templatesPath, 'styles'), path.join(rhylaPath, 'styles'), { recursive: true });
 
