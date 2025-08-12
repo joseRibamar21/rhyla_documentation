@@ -2,11 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import markdownIt from 'markdown-it';
 import { generateSidebarHTML } from '../utils/sidebar.js';
+import { spawnSync } from 'child_process';
 
 export default function build() {
   const root = process.cwd();
   const rhylaPath = path.join(root, 'rhyla');
-  const templatesPath = path.join(root, 'templates');
   const distPath = path.join(root, 'dist');
 
   if (!fs.existsSync(rhylaPath)) {
@@ -24,7 +24,32 @@ export default function build() {
   fs.mkdirSync(path.join(distPath, 'styles'), { recursive: true });
   fs.cpSync(path.join(rhylaPath, 'styles'), path.join(distPath, 'styles'), { recursive: true });
 
-  // Ler header/footer
+  // Gerar índice de busca (usa o script do projeto)
+  const searchScript = path.join(rhylaPath, 'scripts', 'generateSearchIndex.js');
+  if (fs.existsSync(searchScript)) {
+    console.log('🔍 Gerando índice de busca...');
+    const res = spawnSync(process.execPath, [searchScript], { cwd: rhylaPath, stdio: 'inherit' });
+    if (res.status !== 0) {
+      console.warn('⚠️ Falha ao gerar índice de busca. Continuando build sem índice.');
+    }
+  }
+
+  // Copiar scripts (inclui search_index.js se existir)
+  const scriptsSrc = path.join(rhylaPath, 'scripts');
+  const scriptsDst = path.join(distPath, 'scripts');
+  if (fs.existsSync(scriptsSrc)) {
+    fs.mkdirSync(scriptsDst, { recursive: true });
+    fs.cpSync(scriptsSrc, scriptsDst, { recursive: true });
+  }
+
+  // Copiar o JSON do índice para a raiz do dist, para atender fetch('/search_index.json')
+  const searchJsonSrc = path.join(rhylaPath, 'scripts', 'search_index.json');
+  const searchJsonDst = path.join(distPath, 'search_index.json');
+  if (fs.existsSync(searchJsonSrc)) {
+    fs.copyFileSync(searchJsonSrc, searchJsonDst);
+  }
+
+  // Ler header/footer e notFound da pasta rhyla/body
   const header = fs.readFileSync(path.join(rhylaPath, 'header.html'), 'utf8');
   const footer = fs.readFileSync(path.join(rhylaPath, 'footer.html'), 'utf8');
   const notFoundTemplatePath = path.join(rhylaPath, 'body', 'notFound.html');
@@ -101,6 +126,16 @@ export default function build() {
   }
 
   processDir(bodyPath);
+
+  // Página de busca estática em /buscar
+  const searchPage = path.join(bodyPath, 'search.html');
+  if (fs.existsSync(searchPage)) {
+    const content = fs.readFileSync(searchPage, 'utf8');
+    const sidebar = generateSidebarHTML(bodyPath, null, null);
+    const outDir = path.join(distPath, 'buscar');
+    fs.mkdirSync(outDir, { recursive: true });
+    fs.writeFileSync(path.join(outDir, 'index.html'), header + sidebar + `<main class=\"rhyla-main\">${content}</main>` + footer);
+  }
 
   // 404 com sidebar
   const sidebar404 = generateSidebarHTML(bodyPath, null, null);

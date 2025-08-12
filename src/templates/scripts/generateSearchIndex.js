@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "fs";
 import { resolve, relative, dirname } from "path";
 import { sync } from "glob";
-import matter from "gray-matter"; // só para separar frontmatter do conteúdo (opcional)
+import matter from "gray-matter";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
