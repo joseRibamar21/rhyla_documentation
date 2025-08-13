@@ -16,6 +16,18 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     .filter(name => !['home.md','home.html','notfound.md','notfound.html'].includes(name.toLowerCase()))
     .map(f => path.basename(f, path.extname(f)));
 
+  const methodOf = (topic) => {
+    const m = String(topic).toLowerCase();
+    if (m.startsWith('get-')) return 'GET';
+    if (m.startsWith('put-')) return 'PUT';
+    if (m.startsWith('delete-')) return 'DELETE';
+    if (m.startsWith('path-')) return 'PATH';
+    if (m.startsWith('patch-')) return 'PATCH';
+    if (m.startsWith('post-')) return 'POST';
+    return null;
+  };
+  const tagHTML = (method, label) => `<span class="http-tag http-tag--${method.toLowerCase()}">${method}</span> ${label}`;
+
   let html = `<aside class="rhyla-sidebar"><ul>`;
 
   // 🔍 Search primeiro
@@ -34,7 +46,14 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
   for (const topic of rootTopics.sort()) {
     if (topic.toLowerCase() === 'search' || topic.toLowerCase() === 'home') continue;
     const isActive = !activeGroup && activeTopic === topic;
-    html += `<li class="${isActive ? 'active' : ''}"><a href="/${topic}.html">📄 ${topic}</a></li>`;
+    const method = methodOf(topic);
+    let label = topic;
+    if (method) {
+      const dashIdx = topic.indexOf('-');
+      label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
+    }
+    const prefix = method ? tagHTML(method, label) : '📄 ' + topic;
+    html += `<li class="${isActive ? 'active' : ''}"><a href="/${topic}.html">${prefix}</a></li>`;
   }
 
   // Pastas / grupos com colapso
@@ -56,7 +75,14 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
 
     for (const topic of topics) {
       const isActive = group === activeGroup && topic === activeTopic;
-      html += `<li class="${isActive ? 'active' : ''}"><a href="/${group}/${topic}.html">📄 ${topic}</a></li>`;
+      const method = methodOf(topic);
+      let label = topic;
+      if (method) {
+        const dashIdx = topic.indexOf('-');
+        label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
+      }
+      const prefix = method ? tagHTML(method, label) : '📄 ' + topic;
+      html += `<li class="${isActive ? 'active' : ''}"><a href="/${group}/${topic}.html">${prefix}</a></li>`;
     }
 
     html += `</ul></li>`;
