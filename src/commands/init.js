@@ -50,7 +50,7 @@ export default function init() {
   const templatesPath = path.join(__dirname, '../templates');
 
   if (!fs.existsSync(templatesPath)) {
-    console.error('❌ Pasta "templates" não encontrada.');
+    console.error('❌ Template folder not found.');
     process.exit(1);
   }
 
@@ -96,5 +96,5 @@ export default function init() {
     fs.copyFileSync(searchHtmlSrc, path.join(rhylaPath, 'body', 'search.html'));
   }
 
-  console.log('✅ Projeto inicializado com sucesso.');
+  console.log('✅ Project initialized successfully.');
 }

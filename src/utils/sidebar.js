@@ -34,7 +34,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
   const hasSearch = rootTopics.includes('search');
   if (hasSearch) {
     const isActiveSearch = !activeGroup && activeTopic === 'search';
-    html += `<li class="${isActiveSearch ? 'active' : ''}"><a href="/search.html">🔍 Search</a></li>`;
+    html += `<li class="${isActiveSearch ? 'active' : ''}"><a href="/search">🔍 Search</a></li>`;
     // Divider
     html += `<li><hr style="border:none; border-top:1px solid #ccc; margin:8px 0;"></li>`;
   }

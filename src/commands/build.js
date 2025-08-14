@@ -16,7 +16,7 @@ export default function build() {
   const templatesPath = path.join(__dirname, '../templates');
 
   if (!fs.existsSync(rhylaPath)) {
-    console.error('❌ Pasta "rhyla" não encontrada. Execute "rhyla init" primeiro.');
+    console.error('❌ Folder "rhyla" not found. Please run "rhyla init" first.');
     process.exit(1);
   }
 
@@ -47,7 +47,7 @@ export default function build() {
     console.log('🔍 Gerando índice de busca...');
     const res = spawnSync(process.execPath, [searchScript], { cwd: rhylaPath, stdio: 'inherit' });
     if (res.status !== 0) {
-      console.warn('⚠️ Falha ao gerar índice de busca. Continuando build sem índice.');
+      console.warn('⚠️ Fail to generate search index. Continuing build without index.');
     }
   }
 
@@ -214,5 +214,5 @@ export default function build() {
     header + sidebar404 + `<main class=\"rhyla-main\">${notFoundHTML}</main>`
   );
 
-  console.log('✅ Build concluído com sucesso.');
+  console.log('✅ Build completed successfully.');
 }

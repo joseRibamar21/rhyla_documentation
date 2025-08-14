@@ -191,73 +191,97 @@
   </div>
 
   <script>
-    let index = [];
-    const resultsDiv = document.getElementById('results');
-    const searchBox = document.getElementById('searchBox');
-    const meta = document.getElementById('meta');
+    (function(){
+      function init(){
+        let index = [];
+        const resultsDiv = document.getElementById('results');
+        const searchBox = document.getElementById('searchBox');
+        const meta = document.getElementById('meta');
 
-    // Carrega índice (via rota). Mantemos simples e robusto.
-    fetch('/search_index.json')
-      .then(res => res.ok ? res.json() : [])
-      .then(data => {
-        index = Array.isArray(data) ? data : [];
-        meta.textContent = index.length ? `${index.length} pages indexed` : 'No pages indexed';
-      })
-      .catch(() => { meta.textContent = 'Failed to load index'; });
+        // Se já existir índice em memória (build), usa como fallback imediato
+        if (Array.isArray(window.__SEARCH_INDEX__)) {
+          index = window.__SEARCH_INDEX__;
+          if (meta) meta.textContent = index.length ? `${index.length} pages indexed` : 'No pages indexed';
+        } else if (meta) {
+          meta.innerHTML = 'Loading index<span class="dots"></span>';
+        }
 
-    function highlight(text, query) {
-      const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp('(' + esc + ')', 'gi');
-      return text.replace(regex, '<mark>$1</mark>');
-    }
+        // URL robusta (dev: /search_index.json, build: /search/search_index.json)
+        const basePath = (location.pathname.endsWith('/') ? location.pathname : location.pathname + '/');
+        const candidates = ['/search_index.json', basePath + 'search_index.json'];
 
-    function formatLabel(page) {
-      if (page.title && page.title.trim()) return page.title;
-      return (page.route || '').replace(/^\//, '') || 'Untitled';
-    }
+        (async () => {
+          for (const url of candidates) {
+            try {
+              const res = await fetch(url);
+              if (!res.ok) continue;
+              const data = await res.json();
+              index = Array.isArray(data) ? data : [];
+              if (meta) meta.textContent = index.length ? `${index.length} pages indexed` : 'No pages indexed';
+              break;
+            } catch (_) { /* tenta próxima URL */ }
+          }
+          if (!index.length && !Array.isArray(window.__SEARCH_INDEX__) && meta) {
+            meta.textContent = 'Failed to load index';
+          }
+        })();
 
-    function search(query) {
-      const q = query.trim();
-      if (!q) { resultsDiv.innerHTML = ''; meta.textContent = index.length ? `${index.length} pages indexed` : 'No pages indexed'; return; }
-      const results = [];
-      const ql = q.toLowerCase();
-      index.forEach(page => {
-        if (!page || !page.content) return;
-        const hay = String(page.content).toLowerCase();
-        const matchIndex = hay.indexOf(ql);
-        if (matchIndex !== -1) {
-          const snippetRaw = String(page.content);
-          const start = Math.max(0, matchIndex - 40);
-          const end = Math.min(snippetRaw.length, matchIndex + 40);
-          const snippet = snippetRaw.slice(start, end);
-          results.push({
-            route: page.route || '#',
-            label: formatLabel(page),
-            snippet: highlight(snippet, q)
+        function highlight(text, query) {
+          const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp('(' + esc + ')', 'gi');
+          return text.replace(regex, '<mark>$1</mark>');
+        }
+
+        function formatLabel(page) {
+          if (page.title && page.title.trim()) return page.title;
+          return (page.route || '').replace(/^\//, '') || 'Untitled';
+        }
+
+        function search(query) {
+          const q = query.trim();
+          if (!q) { if (resultsDiv) resultsDiv.innerHTML = ''; if (meta) meta.textContent = index.length ? `${index.length} pages indexed` : 'No pages indexed'; return; }
+          const results = [];
+          const ql = q.toLowerCase();
+          index.forEach(page => {
+            if (!page || !page.content) return;
+            const hay = String(page.content).toLowerCase();
+            const matchIndex = hay.indexOf(ql);
+            if (matchIndex !== -1) {
+              const snippetRaw = String(page.content);
+              const start = Math.max(0, matchIndex - 40);
+              const end = Math.min(snippetRaw.length, matchIndex + 40);
+              const snippet = snippetRaw.slice(start, end);
+              results.push({ route: page.route || '#', label: formatLabel(page), snippet: highlight(snippet, q) });
+            }
+          });
+          displayResults(results);
+        }
+
+        function displayResults(results) {
+          if (!resultsDiv) return;
+          resultsDiv.innerHTML = '';
+          if (!results.length) { if (meta) meta.textContent = 'Nenhum resultado encontrado'; return; }
+          if (meta) meta.textContent = `${results.length} resultado(s)`;
+          results.forEach((r, i) => {
+            const div = document.createElement('div');
+            div.className = 'result';
+            div.style.setProperty('--delay', (i * 0.02) + 's');
+            div.innerHTML = `<a href="${r.route}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
+            resultsDiv.appendChild(div);
           });
         }
-      });
-      displayResults(results);
-    }
 
-    function displayResults(results) {
-      resultsDiv.innerHTML = '';
-      if (!results.length) { meta.textContent = 'Nenhum resultado encontrado'; return; }
-      meta.textContent = `${results.length} resultado(s)`;
-      results.forEach((r, i) => {
-        const div = document.createElement('div');
-        div.className = 'result';
-        div.style.setProperty('--delay', (i * 0.02) + 's');
-        div.innerHTML = `<a href="${r.route}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
-        resultsDiv.appendChild(div);
-      });
-    }
+        function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); }; }
+        const onInput = debounce(e => search(e.target.value), 200);
+        if (searchBox) searchBox.addEventListener('input', onInput);
+      }
 
-    // Debounce
-    function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn.apply(this, args), ms); }; }
-    const onInput = debounce(e => search(e.target.value), 200);
-
-    searchBox.addEventListener('input', onInput);
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+      } else {
+        init();
+      }
+    })();
   </script>
 </body>
 
