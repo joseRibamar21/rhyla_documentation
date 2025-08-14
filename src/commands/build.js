@@ -67,7 +67,6 @@ export default function build() {
 
   // Ler header/footer e notFound da pasta rhyla/body
   const header = fs.readFileSync(path.join(rhylaPath, 'header.html'), 'utf8');
-  const footer = fs.readFileSync(path.join(rhylaPath, 'footer.html'), 'utf8');
   const notFoundTemplatePath = path.join(rhylaPath, 'body', 'notFound.html');
   const notFoundHTML = fs.existsSync(notFoundTemplatePath)
     ? fs.readFileSync(notFoundTemplatePath, 'utf8')
