@@ -1,6 +1,6 @@
 :root{
   --rh-header-height: 64px;
-  --rh-sidebar-width: 260px;
+  --rh-sidebar-width: 300px;
   --rh-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   /* cores base (serão sobrescritas pelos temas) */
   --rh-bg: #ffffff;
