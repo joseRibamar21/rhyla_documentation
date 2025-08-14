@@ -115,9 +115,9 @@ export default function build() {
       if (!(item.name.endsWith('.md') || item.name.endsWith('.html'))) continue;
       if (EXCLUDE.has(lower)) continue;
 
-      const topic = path.basename(item.name, path.extname(item.name));
-      // group = primeiro segmento se houver subdiretório
-      const group = relPath ? relPath.split(path.sep)[0] : null;
+  const topic = path.basename(item.name, path.extname(item.name));
+  // group = caminho relativo completo do diretório (para suportar subpastas aninhadas)
+  const group = relPath ? relPath.split(path.sep).join('/') : null;
 
       let content = '';
       if (item.name.endsWith('.md')) {
@@ -126,7 +126,7 @@ export default function build() {
         content = fs.readFileSync(itemPath, 'utf8');
       }
 
-      const sidebar = generateSidebarHTML(bodyPath, group, topic);
+  const sidebar = generateSidebarHTML(bodyPath, group, topic);
 
       const outDir = path.join(distPath, relPath);
       fs.mkdirSync(outDir, { recursive: true });

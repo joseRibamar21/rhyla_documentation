@@ -2,18 +2,16 @@ import fs from 'fs';
 import path from 'path';
 
 export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = null) {
-  const groups = fs.readdirSync(bodyPath)
-    .filter(name => {
-      const full = path.join(bodyPath, name);
-      return fs.statSync(full).isDirectory();
-    });
+  const isFileTopic = (name) => /\.(md|html)$/i.test(name);
+  const isHiddenSpecial = (name) => ['home.md','home.html','notfound.md','notfound.html'].includes(name.toLowerCase());
+  const isDir = (full) => fs.existsSync(full) && fs.statSync(full).isDirectory();
 
   const rootTopics = fs.readdirSync(bodyPath)
     .filter(name => {
       const full = path.join(bodyPath, name);
-      return fs.statSync(full).isFile() && /\.(md|html)$/i.test(name);
+      return fs.statSync(full).isFile() && isFileTopic(name);
     })
-    .filter(name => !['home.md','home.html','notfound.md','notfound.html'].includes(name.toLowerCase()))
+    .filter(name => !isHiddenSpecial(name))
     .map(f => path.basename(f, path.extname(f)));
 
   const methodOf = (topic) => {
@@ -56,37 +54,52 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     html += `<li class="${isActive ? 'active' : ''}"><a href="/${topic}.html">${prefix}</a></li>`;
   }
 
-  // Pastas / grupos com colapso
-  for (const group of groups.sort()) {
-    const isOpen = activeGroup === group; // Abre se for a pasta ativa
-    html += `
-      <li class="group ${isOpen ? 'open' : ''}">
-        <div class="group-header" onclick="toggleFolder(this)">
-          <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> 📁 ${group}
-        </div>
-        <ul class="group-content" style="max-height:${isOpen ? '500px' : '0'};">
-    `;
+  // Render recursivo de diretórios
+  function renderDir(dirAbs, relUrl = '') {
+    // Arquivos diretos neste diretório
+    const entries = fs.readdirSync(dirAbs);
+    const files = entries.filter(name => isFileTopic(name) && !isHiddenSpecial(name)).sort();
+    const dirs = entries.filter(name => isDir(path.join(dirAbs, name))).sort();
 
-    const groupDir = path.join(bodyPath, group);
-    const topics = fs.readdirSync(groupDir)
-      .filter(f => (f.endsWith('.md') || f.endsWith('.html')) && !['notfound.md','notfound.html','home.md','home.html'].includes(f.toLowerCase()))
-      .map(f => path.basename(f, path.extname(f)))
-      .sort();
-
-    for (const topic of topics) {
-      const isActive = group === activeGroup && topic === activeTopic;
-      const method = methodOf(topic);
-      let label = topic;
-      if (method) {
-        const dashIdx = topic.indexOf('-');
-        label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
+    // Arquivos primeiro (exceto na raiz, que já é renderizada acima)
+    if (relUrl) {
+      for (const file of files) {
+        const topic = path.basename(file, path.extname(file));
+        const relForCompare = relUrl || '';
+        const ag = activeGroup || '';
+        const isActive = (relForCompare === ag) && (activeTopic === topic);
+        const method = methodOf(topic);
+        let label = topic;
+        if (method) {
+          const dashIdx = topic.indexOf('-');
+          label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
+        }
+        const prefix = method ? tagHTML(method, label) : '📄 ' + topic;
+        const href = `/${relUrl ? relUrl + '/' : ''}${topic}.html`;
+        html += `<li class="${isActive ? 'active' : ''}"><a href="${href}">${prefix}</a></li>`;
       }
-      const prefix = method ? tagHTML(method, label) : '📄 ' + topic;
-      html += `<li class="${isActive ? 'active' : ''}"><a href="/${group}/${topic}.html">${prefix}</a></li>`;
     }
 
-    html += `</ul></li>`;
+    // Subdiretórios
+    for (const d of dirs) {
+      const dirPath = path.join(dirAbs, d);
+      const childRel = relUrl ? `${relUrl}/${d}` : d;
+      const ag = activeGroup || '';
+      const isOpen = ag === childRel || ag.startsWith(childRel + '/'); // abre ancestrais
+      html += `
+        <li class="group ${isOpen ? 'open' : ''}">
+          <div class="group-header" onclick="toggleFolder(this)">
+            <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> 📁 ${d}
+          </div>
+          <ul class="group-content" style="max-height:0;">
+      `;
+      renderDir(dirPath, childRel);
+      html += `</ul></li>`;
+    }
   }
+
+  // Render a partir da raiz do body
+  renderDir(bodyPath, '');
 
   // Footer estático no final da sidebar
   const footer = `
@@ -99,18 +112,69 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
   // Script de controle (injetado no final)
   html += `
     <script>
+      function adjustAncestorHeights(el){
+        let p = el && el.parentElement;
+        const limit = 10; let i=0;
+        while (p && i++ < limit){
+          if (p.classList && p.classList.contains('group-content')){
+            const parentLi = p.parentElement;
+            if (parentLi && parentLi.classList.contains('open')){
+              // Deixe aberto com altura automática após a transição
+              p.style.maxHeight = 'none';
+            }
+          }
+          p = p.parentElement;
+        }
+      }
+
       function toggleFolder(header) {
         const li = header.parentElement;
         const arrow = header.querySelector('.dropdown-arrow');
         const content = li.querySelector('.group-content');
-        li.classList.toggle('open');
-        arrow.classList.toggle('open');
-        if (li.classList.contains('open')) {
-          content.style.maxHeight = content.scrollHeight + 'px';
+        if (!content) return;
+        const isOpen = li.classList.contains('open');
+        if (isOpen) {
+          // Fechar: se estiver 'none', re-medimos antes de animar para 0
+          const computed = getComputedStyle(content).maxHeight;
+          if (computed === 'none' || content.style.maxHeight === 'none' || !content.style.maxHeight) {
+            content.style.maxHeight = content.scrollHeight + 'px';
+            // força reflow
+            void content.offsetHeight;
+          }
+          requestAnimationFrame(() => { content.style.maxHeight = '0'; });
+          li.classList.remove('open');
+          arrow.classList.remove('open');
+          content.addEventListener('transitionend', function onEnd(){
+            content.removeEventListener('transitionend', onEnd);
+            // após fechar, mantenha em 0
+            content.style.maxHeight = '0';
+            adjustAncestorHeights(content);
+          }, { once: true });
         } else {
-          content.style.maxHeight = '0';
+          // Abrir: anima até a altura total e depois fixa em 'none' (auto)
+          li.classList.add('open');
+          arrow.classList.add('open');
+          content.style.maxHeight = content.scrollHeight + 'px';
+          content.addEventListener('transitionend', function onEnd(){
+            content.removeEventListener('transitionend', onEnd);
+            content.style.maxHeight = 'none';
+            adjustAncestorHeights(content);
+            try { content.scrollIntoView({ block: 'nearest' }); } catch(_) {}
+          }, { once: true });
         }
       }
+
+      // Ao carregar, garanta que grupos marcados como .open tenham a altura correta
+      (function initOpenHeights(){
+        if (document.readyState === 'loading'){
+          document.addEventListener('DOMContentLoaded', initOpenHeights);
+          return;
+        }
+        document.querySelectorAll('.rhyla-sidebar .group.open > .group-content').forEach(ul => {
+          // grupos abertos começam com altura auto
+          ul.style.maxHeight = 'none';
+        });
+      })();
     </script>
   `;
 

@@ -105,7 +105,7 @@ export default function dev() {
     } else {
       return next();
     }
-    const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, topic);
+  const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, topic);
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 
@@ -123,15 +123,16 @@ export default function dev() {
     } else {
       return next();
     }
-    const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, topic);
+  const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, topic);
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 
   // Páginas em subpastas com .html
   app.get("/:group/:topic.html", (req, res, next) => {
     const { group, topic } = req.params;
-    const fileMd = path.join(rhylaPath, "body", group, `${topic}.md`);
-    const fileHtml = path.join(rhylaPath, "body", group, `${topic}.html`);
+    const groupRel = group; // para este handler, apenas um nível
+    const fileMd = path.join(rhylaPath, "body", groupRel, `${topic}.md`);
+    const fileHtml = path.join(rhylaPath, "body", groupRel, `${topic}.html`);
     let content = "";
     if (fs.existsSync(fileMd)) {
       content = md.render(fs.readFileSync(fileMd, "utf8"));
@@ -140,7 +141,7 @@ export default function dev() {
     } else {
       return next();
     }
-    const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), group, topic);
+  const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), groupRel, topic);
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 
@@ -149,8 +150,9 @@ export default function dev() {
     const { group, topic } = req.params;
     if (group === "styles" || group === "scripts") return next();
     if (topic.includes(".")) return next();
-    const fileMd = path.join(rhylaPath, "body", group, `${topic}.md`);
-    const fileHtml = path.join(rhylaPath, "body", group, `${topic}.html`);
+    const groupRel = group;
+    const fileMd = path.join(rhylaPath, "body", groupRel, `${topic}.md`);
+    const fileHtml = path.join(rhylaPath, "body", groupRel, `${topic}.html`);
     let content = "";
     if (fs.existsSync(fileMd)) {
       content = md.render(fs.readFileSync(fileMd, "utf8"));
@@ -159,7 +161,33 @@ export default function dev() {
     } else {
       return next();
     }
-    const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), group, topic);
+  const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), groupRel, topic);
+    res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
+  });
+
+  // Catch-all para caminhos aninhados (ex.: /a/b/c)
+  app.get("/*", (req, res, next) => {
+    const p = req.path; // ex.: /a/b/c
+    if (p === "/" || p.startsWith("/styles/") || p.startsWith("/public/") || p === "/search" || p === "/search_index.json") return next();
+    const parts = p.replace(/^\//, "").split("/").filter(Boolean);
+    if (!parts.length) return next();
+    const last = parts[parts.length - 1];
+    const dirParts = parts.slice(0, -1);
+    const dirAbs = path.join(rhylaPath, "body", ...dirParts);
+    if (!fs.existsSync(dirAbs)) return next();
+    const base = last.replace(/\.html$/i, "");
+
+    const mdPath = path.join(dirAbs, `${base}.md`);
+    const htmlPath = path.join(dirAbs, `${base}.html`);
+    let content = "";
+    if (fs.existsSync(mdPath)) content = md.render(fs.readFileSync(mdPath, "utf8"));
+    else if (fs.existsSync(htmlPath)) content = fs.readFileSync(htmlPath, "utf8");
+    else return next();
+
+    // activeGroup = primeiro segmento da rota
+  const activeGroup = dirParts.join('/') || null;
+    const activeTopic = base;
+    const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), activeGroup, activeTopic);
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 
