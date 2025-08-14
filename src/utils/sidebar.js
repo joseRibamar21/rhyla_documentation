@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = null) {
+  const INDENT = 20; // px por nível de profundidade
   const isFileTopic = (name) => /\.(md|html)$/i.test(name);
   const isHiddenSpecial = (name) => ['home.md','home.html','notfound.md','notfound.html'].includes(name.toLowerCase());
   const isDir = (full) => fs.existsSync(full) && fs.statSync(full).isDirectory();
@@ -55,7 +56,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
   }
 
   // Render recursivo de diretórios
-  function renderDir(dirAbs, relUrl = '') {
+  function renderDir(dirAbs, relUrl = '', depth = 0) {
     // Arquivos diretos neste diretório
     const entries = fs.readdirSync(dirAbs);
     const files = entries.filter(name => isFileTopic(name) && !isHiddenSpecial(name)).sort();
@@ -86,14 +87,16 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       const childRel = relUrl ? `${relUrl}/${d}` : d;
       const ag = activeGroup || '';
       const isOpen = ag === childRel || ag.startsWith(childRel + '/'); // abre ancestrais
+      const padHeader = depth * INDENT; // pasta atual
+      const padContent = (depth + 0.3) * INDENT; // conteúdo dentro da pasta
       html += `
         <li class="group ${isOpen ? 'open' : ''}">
-          <div class="group-header" onclick="toggleFolder(this)">
+          <div class="group-header" style="padding-left:${padHeader}px;" onclick="toggleFolder(this)">
             <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> 📁 ${d}
           </div>
-          <ul class="group-content" style="max-height:0;">
+          <ul class="group-content" style="max-height:0; padding-left:${padContent}px;">
       `;
-      renderDir(dirPath, childRel);
+      renderDir(dirPath, childRel, depth + 0.3);
       html += `</ul></li>`;
     }
   }
