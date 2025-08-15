@@ -107,7 +107,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
   // Footer estático no final da sidebar
   const footer = `
   <footer class="rhyla-footer">
-    <p style="margin:0;font-size:13px;color:var(--rh-muted);">&copy; 2025 - Made with Rhyla</p>
+    <p style="margin:0;font-size:13px;color:var(--rh-muted);">&copy; 2025 - Made by Rhyla</p>
   </footer>`;
 
   html += `</ul>${footer}</aside>`;

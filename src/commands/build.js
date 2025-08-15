@@ -74,6 +74,20 @@ export default function build() {
 
   const bodyPath = path.join(rhylaPath, 'body');
 
+  function withInlineHeaderRuntime(html) {
+    try {
+      const runtimePath = path.join(templatesPath, 'scripts', 'header-runtime.js');
+      if (!fs.existsSync(runtimePath)) return html;
+      const runtime = fs.readFileSync(runtimePath, 'utf8');
+      return html.replace(
+        /<script\s+src=["']\/scripts\/header-runtime\.js["']><\/script>/i,
+        `<script>\n${runtime}\n<\/script>`
+      );
+    } catch { return html; }
+  }
+
+  const headerInline = withInlineHeaderRuntime(header);
+
   // Gerar home como index.html
   const homePath = path.join(bodyPath, 'home.md');
   if (fs.existsSync(homePath)) {
@@ -81,13 +95,13 @@ export default function build() {
     const sidebar = generateSidebarHTML(bodyPath, null, 'home');
     fs.writeFileSync(
       path.join(distPath, 'index.html'),
-      header + sidebar + `<main class="rhyla-main">${content}</main>`
+      headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`
     );
   } else {
     const sidebar = generateSidebarHTML(bodyPath, null, null);
     fs.writeFileSync(
       path.join(distPath, 'index.html'),
-      header + sidebar + `<main class="rhyla-main">${notFoundHTML}</main>`
+      headerInline + sidebar + `<main class=\"rhyla-main\">${notFoundHTML}</main>`
     );
   }
 
@@ -130,16 +144,16 @@ export default function build() {
       const outDir = path.join(distPath, relPath);
       fs.mkdirSync(outDir, { recursive: true });
 
-      const pageHTML = header + sidebar + `<main class=\"rhyla-main\">${content}</main>`;
+  const pageHTML = headerInline + sidebar + `<main class=\\\"rhyla-main\\\">${content}</main>`;
 
       // Salva como topic.html (mantém padrão de links existentes)
-      fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
+  fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
 
       // Se estiver no nível raiz (relPath === '') gerar também /topic/index.html para URL limpa /topic/
       if (!relPath) {
         const cleanDir = path.join(distPath, topic);
         fs.mkdirSync(cleanDir, { recursive: true });
-        fs.writeFileSync(path.join(cleanDir, 'index.html'), pageHTML);
+  fs.writeFileSync(path.join(cleanDir, 'index.html'), pageHTML);
       }
     }
   }
@@ -155,7 +169,7 @@ export default function build() {
 
   if (searchPage) {
     let content = fs.readFileSync(searchPage, 'utf8');
-    const sidebar = generateSidebarHTML(bodyPath, null, null);
+  const sidebar = generateSidebarHTML(bodyPath, null, null);
     const outDir = path.join(distPath, 'search');
     fs.mkdirSync(outDir, { recursive: true });
 
@@ -203,14 +217,14 @@ export default function build() {
     // Ajustar também referências diretas no HTML, caso existam
     normalized = normalized.replace(/\/search_index\.json/g, './search_index.json');
 
-    fs.writeFileSync(path.join(outDir, 'index.html'), header + sidebar + `<main class=\"rhyla-main\">${normalized}</main>`);
+  fs.writeFileSync(path.join(outDir, 'index.html'), headerInline + sidebar + `<main class=\"rhyla-main\">${normalized}</main>`);
   }
 
   // 404 com sidebar
   const sidebar404 = generateSidebarHTML(bodyPath, null, null);
   fs.writeFileSync(
     path.join(distPath, '404.html'),
-    header + sidebar404 + `<main class=\"rhyla-main\">${notFoundHTML}</main>`
+    headerInline + sidebar404 + `<main class=\"rhyla-main\">${notFoundHTML}</main>`
   );
 
   console.log('✅ Build completed successfully.');
