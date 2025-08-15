@@ -29,8 +29,6 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
 
   let html = `<aside class="rhyla-sidebar"><ul>`;
 
-  // � Removido: Search agora é overlay no header
-
   // 🏠 Home
   html += `<li class="item-sidebar ${activeTopic === 'home' ? 'active' : ''}"><a href="/">🏠 Home</a></li>`;
 

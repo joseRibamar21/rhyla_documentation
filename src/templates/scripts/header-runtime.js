@@ -68,8 +68,13 @@
     try {
       const sb = document.querySelector('.rhyla-sidebar');
       if (!sb) return;
+      // Normaliza: remove query e hash
+      let pathOnly = typeof pathname === 'string' && pathname ? pathname : location.pathname;
+      try { pathOnly = new URL(pathOnly, location.origin).pathname; } catch(_) { pathOnly = location.pathname; }
+      // Remove trailing slash (exceto raiz)
+      if (pathOnly.length > 1 && pathOnly.endsWith('/')) pathOnly = pathOnly.replace(/\/+$/,'');
       sb.querySelectorAll('li.active').forEach(li => li.classList.remove('active'));
-      const link = sb.querySelector(`a[href='${pathname}'], a[href='${pathname}.html']`);
+      const link = sb.querySelector(`a[href='${pathOnly}'], a[href='${pathOnly}.html']`);
       if (link) {
         const li = link.closest('li');
         if (li) li.classList.add('active');
@@ -92,11 +97,12 @@
     if (!newMain || !main) return false;
     main.innerHTML = newMain.innerHTML;
     executeScripts(main);
-    if (newUrl && doPush) history.pushState({}, '', newUrl);
-    updateActiveSidebar(newUrl || location.pathname);
+  if (newUrl && doPush) history.pushState({}, '', newUrl);
+  updateActiveSidebar(newUrl || location.pathname);
     main.scrollTop = 0;
-  // Regerar TOC após navegação SPA
+  // Regerar TOC após navegação SPA e rolar para a query, se houver
   if (RHYLA_CFG.side_topics) generateRightTOC();
+  scrollToQueryIfAny();
     return true;
   }
 
@@ -122,7 +128,8 @@
   });
 
   window.addEventListener('popstate', () => {
-    navigate(location.pathname + location.search + location.hash, false);
+  navigate(location.pathname + location.search + location.hash, false);
+  setTimeout(scrollToQueryIfAny, 0);
   });
 
   // ===== Global Search Overlay =====
@@ -162,6 +169,18 @@
     return (page.route || '').replace(/^\//, '') || 'Untitled';
   }
 
+  function buildRouteWithQuery(route, query) {
+    try {
+      const parts = String(route || '#').split('#');
+      const path = parts[0];
+      const hash = parts[1] ? ('#' + parts[1]) : '';
+      const sep = path.includes('?') ? '&' : '?';
+      return path + sep + 'query=' + encodeURIComponent(query) + hash;
+    } catch (_) {
+      return route;
+    }
+  }
+
   function doSearch(query) {
     const q = (query || '').trim();
     if (!q) { resultsDiv.innerHTML = ''; if (meta) meta.textContent = searchIndex.length ? `${searchIndex.length} pages indexed` : 'No pages indexed'; return; }
@@ -185,7 +204,8 @@
     results.forEach(r => {
       const div = document.createElement('div');
       div.className = 'result';
-      div.innerHTML = `<a href="${r.route}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
+      const href = buildRouteWithQuery(r.route, q);
+      div.innerHTML = `<a href="${href}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
       resultsDiv.appendChild(div);
     });
   }
@@ -293,5 +313,87 @@
       <div class="rh-toc-header">On this page</div>
       <nav class="rh-toc-wrap">${renderToc(tree)}</nav>
     `;
+
+    // Navegação suave para âncoras do TOC
+    const main = document.querySelector('main.rhyla-main');
+    if (toc && main) {
+      toc.addEventListener('click', (e) => {
+        const a = e.target && e.target.closest('a');
+        if (!a) return;
+        const id = a.getAttribute('href') || '';
+        if (!id.startsWith('#')) return;
+        e.preventDefault();
+        const el = main.querySelector(id);
+        if (el) {
+          try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(_) { el.scrollIntoView(); }
+          if (history && history.pushState) {
+            const url = new URL(location.href);
+            url.hash = id;
+            history.pushState({}, '', url.toString());
+          } else {
+            location.hash = id;
+          }
+        }
+      });
+    }
+  }
+
+  // ===== Query based smooth scroll =====
+  function readQueryParam() {
+    try {
+      const url = new URL(location.href);
+      let q = url.searchParams.get('query');
+      if (!q) return '';
+      q = q.replace(/^"|"$/g, '').replace(/^'|'$/g, '');
+      return q.trim();
+    } catch (_) { return ''; }
+  }
+
+  function normalizeText(s) {
+    try { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); }
+    catch(_) { return String(s || '').toLowerCase(); }
+  }
+
+  function findFirstMatchElement(q) {
+    if (!q) return null;
+    const main = document.querySelector('main.rhyla-main');
+    if (!main) return null;
+    const sel = 'h1,h2,h3,h4,p,li,pre,code,td,th,blockquote';
+    const nodes = Array.from(main.querySelectorAll(sel));
+    const ql = normalizeText(q);
+    for (const n of nodes) {
+      const txt = normalizeText(n.textContent || '');
+      if (txt.includes(ql)) return n;
+    }
+    return null;
+  }
+
+  function scrollToQueryIfAny() {
+    const q = readQueryParam();
+    if (!q) return;
+    let el = findFirstMatchElement(q);
+    if (el) {
+      try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_) { el.scrollIntoView(); }
+      el.classList.add('rh-scroll-highlight');
+      setTimeout(() => el.classList.remove('rh-scroll-highlight'), 1800);
+    } else {
+      // Tenta novamente após um pequeno atraso (conteído assíncrono ou imagens afetando layout)
+      setTimeout(() => {
+        const el2 = findFirstMatchElement(q);
+        if (el2) {
+          try { el2.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_) { el2.scrollIntoView(); }
+          el2.classList.add('rh-scroll-highlight');
+          setTimeout(() => el2.classList.remove('rh-scroll-highlight'), 1800);
+        }
+      }, 120);
+    }
+  }
+
+  // Scroll inicial quando a página carrega
+  if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => { updateActiveSidebar(location.pathname); scrollToQueryIfAny(); });
+  } else {
+  updateActiveSidebar(location.pathname);
+  scrollToQueryIfAny();
   }
 })();
