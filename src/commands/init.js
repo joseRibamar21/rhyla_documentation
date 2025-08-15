@@ -90,8 +90,6 @@ export default function init() {
     }
   }
 
-  // Não criamos mais scripts dentro de rhyla; manipulados em src/templates/scripts
-
   // Copiar search.html (visível)
   const searchHtmlSrc = path.join(templatesPath, 'search.html');
   if (fs.existsSync(searchHtmlSrc)) {

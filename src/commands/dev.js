@@ -56,6 +56,12 @@ export default function dev() {
   // Servir assets públicos do usuário (imagens, fontes, etc.)
   app.use("/public", express.static(path.join(rhylaPath, "public")));
   app.use("/scripts", express.static(scriptsFolderPath));
+  // Alias para compatibilidade: permitir /scripts/search-runtime.js apontar para search_runtime.js
+  app.get('/scripts/search-runtime.js', (req, res) => {
+    const p = path.join(scriptsFolderPath, 'search_runtime.js');
+    if (fs.existsSync(p)) return res.sendFile(p);
+    res.status(404).end();
+  });
 
   // Servir o índice gerado (em src/templates/scripts/search_index.json)
   app.get("/search_index.json", (req, res) => {

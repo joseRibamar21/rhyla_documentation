@@ -128,9 +128,9 @@ export default function build() {
       if (!(item.name.endsWith('.md') || item.name.endsWith('.html'))) continue;
       if (EXCLUDE.has(lower)) continue;
 
-  const topic = path.basename(item.name, path.extname(item.name));
-  // group = caminho relativo completo do diretório (para suportar subpastas aninhadas)
-  const group = relPath ? relPath.split(path.sep).join('/') : null;
+      const topic = path.basename(item.name, path.extname(item.name));
+      // group = caminho relativo completo do diretório (para suportar subpastas aninhadas)
+      const group = relPath ? relPath.split(path.sep).join('/') : null;
 
       let content = '';
       if (item.name.endsWith('.md')) {
@@ -139,21 +139,21 @@ export default function build() {
         content = fs.readFileSync(itemPath, 'utf8');
       }
 
-  const sidebar = generateSidebarHTML(bodyPath, group, topic);
+      const sidebar = generateSidebarHTML(bodyPath, group, topic);
 
       const outDir = path.join(distPath, relPath);
       fs.mkdirSync(outDir, { recursive: true });
 
-  const pageHTML = headerInline + sidebar + `<main class=\\\"rhyla-main\\\">${content}</main>`;
+  const pageHTML = headerInline + sidebar + `<main class="rhyla-main">${content}</main>`;
 
       // Salva como topic.html (mantém padrão de links existentes)
-  fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
+      fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
 
       // Se estiver no nível raiz (relPath === '') gerar também /topic/index.html para URL limpa /topic/
       if (!relPath) {
         const cleanDir = path.join(distPath, topic);
         fs.mkdirSync(cleanDir, { recursive: true });
-  fs.writeFileSync(path.join(cleanDir, 'index.html'), pageHTML);
+        fs.writeFileSync(path.join(cleanDir, 'index.html'), pageHTML);
       }
     }
   }
@@ -169,7 +169,7 @@ export default function build() {
 
   if (searchPage) {
     let content = fs.readFileSync(searchPage, 'utf8');
-  const sidebar = generateSidebarHTML(bodyPath, null, null);
+    const sidebar = generateSidebarHTML(bodyPath, null, null);
     const outDir = path.join(distPath, 'search');
     fs.mkdirSync(outDir, { recursive: true });
 
@@ -190,41 +190,54 @@ export default function build() {
     let pageInner = bodyMatch ? bodyMatch[1] : content;
     let normalized = `${styleTags.join('\n')}\n${pageInner}`;
 
-    // Extrair script inline para script_search.js e ajustar fetch para URL robusta e DOMContentLoaded + fallback
-    const scriptMatch = normalized.match(/<script\b[^>]*>([\s\S]*?)<\/script>/i);
-    if (scriptMatch) {
-      let scriptCode = scriptMatch[1];
-      // Computa URL robusta para /search e /search/
-      const urlPrelude = `const __basePath = (location.pathname.endsWith('/') ? location.pathname : location.pathname + '/');\nconst __searchIndexUrl = __basePath + 'search_index.json';\n`;
-      // Substitui quaisquer formas conhecidas de fetch do índice
-      scriptCode = scriptCode
-        .replace(/fetch\(\s*(['\"])\.?\/?search_index\.json\1\s*\)/g, 'fetch(__searchIndexUrl)')
-        .replace(/fetch\(\s*(['\"])\/search_index\.json\1\s*\)/g, 'fetch(__searchIndexUrl)')
-        .replace(/fetch\(\s*(['\"])\/search\/search_index\.json\1\s*\)/g, 'fetch(__searchIndexUrl)');
 
-      // Injetar fallback logo após capturar meta
+    const inlineMatch = normalized.match(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/i);
+    const externalTagRe = /<script\s+src=["']\s*\/scripts\/search[-_]runtime\.js\s*["']\s*><\/script>/i;
+    const hasExternal = externalTagRe.test(normalized);
+
+    if (inlineMatch) {
+      let scriptCode = inlineMatch[1];
+      const urlPrelude = `const __basePath = (location.pathname.endsWith('/') ? location.pathname : location.pathname + '/');\nconst __searchIndexUrl = __basePath + 'search_index.json';\n`;
+      scriptCode = scriptCode
+        .replace(/fetch\(\s*(['"])\.?\/??search_index\.json\1\s*\)/g, 'fetch(__searchIndexUrl)')
+        .replace(/fetch\(\s*(['"])\/search_index\.json\1\s*\)/g, 'fetch(__searchIndexUrl)')
+        .replace(/fetch\(\s*(['"])\/search\/search_index\.json\1\s*\)/g, 'fetch(__searchIndexUrl)');
       scriptCode = scriptCode.replace(
-        /(const\s+meta\s*=\s*document\.getElementById\(['\"]meta['\"]\)\s*;?)/,
+        /(const\s+meta\s*=\s*document\.getElementById\(['"]meta['"]\)\s*;?)/,
         `$1\n    if (Array.isArray(window.__SEARCH_INDEX__)) { index = window.__SEARCH_INDEX__; if (meta) { meta.textContent = (index.length ? index.length + ' páginas indexadas' : 'Nenhuma página indexada'); } }\n`
       );
-
       const wrapped = `(() => { const run = () => { ${urlPrelude}${scriptCode}\n }; if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', run); } else { run(); } })();`;
       fs.writeFileSync(path.join(outDir, 'script_search.js'), wrapped, 'utf8');
-      // Usar caminhos absolutos para funcionar em /search e /search/
-      normalized = normalized.replace(scriptMatch[0], '<script src="/search/search_index.js"></script>\n<script src="/search/script_search.js"></script>');
+      normalized = normalized.replace(inlineMatch[0], '<script src="/search/search_index.js"></script>\n<script src="/search/script_search.js"></script>');
+    } else if (hasExternal) {
+      // Lê o runtime externo e escreve como script_search.js no build
+      const runtimeUnderscore = path.join(templatesPath, 'scripts', 'search_runtime.js');
+      const runtimeDash = path.join(templatesPath, 'scripts', 'search-runtime.js');
+      const runtimePath = fs.existsSync(runtimeUnderscore) ? runtimeUnderscore : runtimeDash;
+      if (runtimePath && fs.existsSync(runtimePath)) {
+        const runtimeCode = fs.readFileSync(runtimePath, 'utf8');
+        // Envelopa para garantir idempotência
+        const wrapped = `(function(){${runtimeCode}\n})();`;
+        fs.writeFileSync(path.join(outDir, 'script_search.js'), wrapped, 'utf8');
+        // Substitui a tag externa por referências aos assets em /search/
+        normalized = normalized.replace(externalTagRe, '<script src="/search/search_index.js"></script>\n<script src="/search/script_search.js"></script>');
+      } else {
+        // Se por algum motivo não existir, apenas remove a tag para não quebrar
+        normalized = normalized.replace(externalTagRe, '');
+      }
     }
 
     // Ajustar também referências diretas no HTML, caso existam
     normalized = normalized.replace(/\/search_index\.json/g, './search_index.json');
 
-  fs.writeFileSync(path.join(outDir, 'index.html'), headerInline + sidebar + `<main class=\"rhyla-main\">${normalized}</main>`);
+  fs.writeFileSync(path.join(outDir, 'index.html'), headerInline + sidebar + `<main class="rhyla-main">${normalized}</main>`);
   }
 
   // 404 com sidebar
   const sidebar404 = generateSidebarHTML(bodyPath, null, null);
   fs.writeFileSync(
     path.join(distPath, '404.html'),
-    headerInline + sidebar404 + `<main class=\"rhyla-main\">${notFoundHTML}</main>`
+  headerInline + sidebar404 + `<main class="rhyla-main">${notFoundHTML}</main>`
   );
 
   console.log('✅ Build completed successfully.');
