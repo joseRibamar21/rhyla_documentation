@@ -1,6 +1,6 @@
 {
   "name": "rhyla",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0-beta.2",
   "description": "Simple, template-driven Markdown documentation generator (CLI)",
   "bin": {
     "rhyla": "./bin/cli.js"

@@ -41,6 +41,13 @@
     }
 }
 
+.item-sidebar{
+  cursor: pointer;
+  &:hover{
+    background: rgba(180, 210, 255, 0.15); /* cor do accent com mais opacidade */
+  }
+}
+
 th, td {
   padding: 8px 12px;
   border: 0;
