@@ -1,9 +1,9 @@
 :root{
-  --rh-bg: #0b0f14;
+  --rh-bg: #000000;
   --rh-text: #e6eef8;
-  --rh-header-bg: #071021;
-  --rh-footer-bg: #071021;
-  --rh-sidebar-bg: #071821;
+  --rh-header-bg: #000000;
+  --rh-footer-bg: #000000;
+  --rh-sidebar-bg: #000000;
   --rh-accent: #60a5fa;
   --rh-active-bg: rgba(96,165,250,0.08);
   --rh-muted: #94a3b8;
@@ -41,11 +41,16 @@
 .theme-switch {
   cursor: pointer;
   background: none;
-  border: 1px solid rgba(0,0,0,0.08);
+  border: 1px solid #444;
   color: #e6eef8;
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 14px;
+  transition: all 0.2s ease;
+  &:hover{
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #666;
+  }
 }
 
 th, td {
@@ -71,12 +76,19 @@ thead th {
 }
 
 tbody tr:nth-child(odd) { background: rgba(255,255,255,0.01); }
-tbody tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+tbody tr:nth-child(even) { background: #0f1824; }
 
 
 pre {
-  background: rgba(255,255,255,0.05);
+  background: #0f1824;
   padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+code {
+  background: #0f1824;
+  padding: 3px;
   border-radius: 6px;
   overflow-x: auto;
 }

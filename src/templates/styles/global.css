@@ -2,7 +2,6 @@
   --rh-header-height: 64px;
   --rh-sidebar-width: 300px;
   --rh-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  /* cores base (serão sobrescritas pelos temas) */
   --rh-bg: #ffffff;
   --rh-text: #111827;
   --rh-header-bg: #ffffff;
@@ -82,10 +81,8 @@ body {
   box-shadow: 0 -1px 0 rgba(0,0,0,0.06);
 }
 
-/* Evita que o último item fique escondido sob o footer fixo */
 .rhyla-sidebar ul { padding-bottom: 32px; }
 
-/* Layout responsivo: em telas pequenas, sidebar vira colapsável (comportamento básico) */
 @media (max-width: 760px) {
   .rhyla-sidebar{
     position: fixed;

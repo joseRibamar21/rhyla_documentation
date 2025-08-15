@@ -3,7 +3,7 @@
   --rh-text: #0f172a;
   --rh-header-bg: #ffffff;
   --rh-footer-bg: #ffffff;
-  --rh-sidebar-bg: #fafafa;
+  --rh-sidebar-bg: #ffffff;
   --rh-accent: #0066ff;
   --rh-active-bg: rgba(0,102,255,0.08);
   --rh-muted: #6b7280;
@@ -34,6 +34,11 @@
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 14px;
+  transition: all 0.2s ease;
+    &:hover{
+      background: rgba(0, 0, 0, 0.1);
+      border-color: #666;
+    }
 }
 
 th, td {
@@ -62,8 +67,15 @@ tbody tr:nth-child(odd) { background: #fff; }
 tbody tr:nth-child(even) { background: #f8fafc; }
 
 pre {
-  background: rgba(0,0,0,0.03);
+  background: #f3f6fa;
   padding: 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+code {
+  background: #f3f6fa;
+  padding: 3px;
   border-radius: 6px;
   overflow-x: auto;
 }
