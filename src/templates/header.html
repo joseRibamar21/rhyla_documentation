@@ -30,8 +30,26 @@
       <img id="rhyla-logo" src="/public/logo.png" alt="Logo da Documentação" style="height:100px;width:auto;">
     </div>
     <div class="rhyla-actions">
+      <button id="search-open" class="theme-switch" aria-label="Abrir busca">🔎 Search</button>
       <button id="theme-toggle" class="theme-switch" aria-label="Alternar tema">🌙 Dark</button>
     </div>
   </header>
+
+  <!-- Overlay de Busca (global) -->
+  <div id="search-overlay" class="rh-search-overlay" aria-hidden="true">
+    <div class="rh-search-backdrop" data-close-overlay></div>
+    <div class="rh-search-panel" role="dialog" aria-modal="true" aria-labelledby="search-input">
+      <div class="rh-search-input-wrap">
+        <svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input id="search-input" type="text" placeholder="Type to search..." autocomplete="off" />
+        <button id="search-close" class="rh-search-close" aria-label="Fechar">✕</button>
+      </div>
+      <div class="rh-search-meta" id="search-meta">Loading index…</div>
+      <div class="rh-search-results" id="search-results" role="list"></div>
+    </div>
+  </div>
 
   <script src="/scripts/header-runtime.js"></script>

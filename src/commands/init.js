@@ -90,11 +90,5 @@ export default function init() {
     }
   }
 
-  // Copiar search.html (visível)
-  const searchHtmlSrc = path.join(templatesPath, 'search.html');
-  if (fs.existsSync(searchHtmlSrc)) {
-    fs.copyFileSync(searchHtmlSrc, path.join(rhylaPath, 'body', 'search.html'));
-  }
-
   console.log('✅ Project initialized successfully.');
 }

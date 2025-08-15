@@ -23,7 +23,6 @@ export default function dev() {
   const notFoundPath = path.join(rhylaPath, "body", "notFound.html");
 
   const searchFileName = os.platform() === "win32" ? "search.html" : ".search.html";
-  const searchFilePath = path.join(rhylaPath, "body", searchFileName);
 
   if (!fs.existsSync(rhylaPath)) {
     console.error('❌ Pasta "rhyla" não encontrada. Execute "rhyla init" primeiro.');
@@ -83,17 +82,6 @@ export default function dev() {
     }
     const content = md.render(fs.readFileSync(homePath, "utf8"));
     const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, "home");
-    res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
-  });
-
-  // Página de busca com suporte a arquivo oculto (.search.html)
-  app.get("/search", (req, res, next) => {
-    const visible = path.join(rhylaPath, "body", "search.html");
-    const hidden = path.join(rhylaPath, "body", ".search.html");
-    const htmlPath = fs.existsSync(visible) ? visible : (fs.existsSync(hidden) ? hidden : null);
-    if (!htmlPath) return next();
-    const content = fs.readFileSync(htmlPath, "utf8");
-    const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, null);
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
 

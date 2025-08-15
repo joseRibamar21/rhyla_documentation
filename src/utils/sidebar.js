@@ -29,14 +29,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
 
   let html = `<aside class="rhyla-sidebar"><ul>`;
 
-  // 🔍 Search primeiro
-  const hasSearch = rootTopics.includes('search');
-  if (hasSearch) {
-    const isActiveSearch = !activeGroup && activeTopic === 'search';
-    html += `<li class="${isActiveSearch ? 'active' : ''}"><a href="/search">🔍 Search</a></li>`;
-    // Divider
-    html += `<li><hr style="border:none; border-top:1px solid #ccc; margin:8px 0;"></li>`;
-  }
+  // � Removido: Search agora é overlay no header
 
   // 🏠 Home
   html += `<li class="${activeTopic === 'home' ? 'active' : ''}"><a href="/">🏠 Home</a></li>`;
