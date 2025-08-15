@@ -75,6 +75,8 @@ export default function init() {
   // Copiar estilos
   fs.cpSync(path.join(templatesPath, 'styles'), path.join(rhylaPath, 'styles'), { recursive: true });
 
+  fs.cpSync(path.join(templatesPath, 'guide'), path.join(rhylaPath, 'body', 'guide'), { recursive: true });
+
   // Copiar public (inclui logo.png se existir)
   const publicTpl = path.join(templatesPath, 'public');
   const publicDst = path.join(rhylaPath, 'public');

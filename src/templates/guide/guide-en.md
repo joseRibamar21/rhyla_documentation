@@ -114,11 +114,8 @@ Generated routes:
 ## Contributing
 Contributions are welcome! Feel free to open issues or submit pull requests on the [GitHub repository](https://github.com/joseRibamar21/rhyla_documentation).
 
-<div align="left">
-  <a href="https://github.com/joseRibamar21" target="_blank">
-    <img src="https://github.com/joseRibamar21.png" width="64" height="64" alt="joseRibamar21" style="border-radius:50%;margin-top:8px;" />
-  </a>
-</div>
+<img src="https://github.com/joseRibamar21.png" width="64" height="64" alt="joseRibamar21" style="border-radius:50%;margin-top:8px;" />
+
 
 --- 
 

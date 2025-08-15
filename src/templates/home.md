@@ -1,129 +1,109 @@
-# 📚 Rhyla Documentation
+# 📚 Rhyla Documentation — Markdown‑first docs, zero friction
 
-**Rhyla Documentation** is a simple and flexible tool to quickly create and organize documentation using **Markdown** files and customizable templates.  
-The main idea is to allow developers to keep all project documentation organized, navigable, and with support for light and dark themes, without relying on heavy tools or complex configurations.
+Rhyla is a lightweight, template‑driven documentation generator. Write in Markdown, drop files into folders, and get a clean docs site with a smart sidebar, instant search, light/dark themes, and a static build ready to deploy.
 
----
-
-## 🚀 Motivation
-- Make it easy to create local and static documentation.
-- Use **Markdown** so content is easy to write and maintain.
-- Allow full customization of **header**, **footer**, **sidebar**, and **themes**.
-- Provide a simple development (`rhyla dev`) and build (`rhyla build`) workflow.
+— Minimal setup. No lock‑in. Fast authoring.
 
 ---
 
-## 🛠 Basic Usage
-1. Install the project globally or use it via local CLI.
-2. Run:
-   ```bash
-   rhyla init
-   ```
-This will create the initial structure with:
-- header.html
-- footer.html
-- config.yaml
-- home.md (this page)
-- body folder for your topics
-
-3. During development, use:
-   ```bash
-   rhyla dev
-   ```
-This will start a local server at `http://localhost:3000` for preview.
-
-4. To generate static documentation, use:
-   ```bash
-   rhyla build
-   ```
-This will create the `rhyla/` folder with the generated HTML files.
+## ✨ Highlights
+- Markdown‑first: `.md` pages are rendered automatically; `.html` pages are kept as‑is.
+- Auto sidebar from folders: nested groups with smooth animations and active state.
+- Built‑in search: index generated from your docs; resilient loading in dev and build.
+- SPA‑like navigation: header and sidebar stay; only content swaps for snappy UX.
+- Theming: light/dark with anti‑flicker first‑paint, easy to customize.
+- Clean URLs: `/topic` and `/group/topic` in dev and build.
+- Static build: one `dist/` folder, drop on any static host (GitHub Pages, Vercel, Netlify).
+- Public assets: serve from `/public` (images, fonts, etc.).
 
 ---
 
-## ✏️ Start customizing!
-The first recommended action is to adapt this `home.md` to your project's context.
+## ⏱ Quickstart
+1) Initialize a docs workspace
+```bash
+rhyla init
+```
+This creates a `rhyla/` folder with templates (`header.html`, `home.md`, `styles/`, `public/`, and `body/`).
 
-### How navigation is built
-The sidebar is automatically generated from the directory tree inside `rhyla/body/`:
-- Each FOLDER inside `body/` works as a GROUP / CATEGORY.
-- Each `.md` FILE becomes a processed page (Markdown → HTML).
-- Each `.html` FILE is included as-is (useful for highly customized pages).
-- The file path defines the route. Example: `rhyla/body/guides/install.md` → route `/guides/install`.
-- The default order is alphabetical (folder and file names). Use clear and consistent names.
+2) Start developing
+```bash
+rhyla dev
+```
+Preview at http://localhost:3333. The sidebar and search update as you add/edit files.
 
-### Creating groups and topics
-Example structure:
+3) Build for production
+```bash
+rhyla build
+```
+Outputs a static site to `dist/`.
+
+---
+
+## 📁 Authoring model
+The sidebar mirrors the folder tree under `rhyla/body/`.
+
+- Folders become groups (with collapsible sections).
+- `.md` files render to HTML; `.html` files are included verbatim.
+- File path defines the route. Examples:
+   - `rhyla/body/get-posts.md` → `/get-posts`
+   - `rhyla/body/api/users/create.md` → `/api/users/create`
+
+Naming tips:
+- Prefer lowercase and hyphens: `quick-start.md`, `advanced-install.md`.
+- Avoid spaces/special characters.
+- Keep names short and descriptive.
+
+---
+
+## 🎨 Theming & layout
+- Global layout: `styles/global.css`.
+- Themes: `styles/light.css` and `styles/dark.css` (variables + colors).
+- Header/Footer: edit `header.html` / `footer.html` as needed.
+- HTTP verb tags are styled via `.http-tag` classes.
+
+Anti‑flicker: the selected theme is applied before first paint to avoid flashing.
+
+---
+
+## 🔎 Search
+Rhyla ships with a content indexer and a special search page.
+
+- Dev: index served from `/search_index.json` and refreshed on changes.
+- Build: assets live under `/search/` (`search_index.json` + scripts).
+- The search UI highlights matches and links to routes.
+
+Tip: keep `rhyla/body/search.html` in your project (it’s listed first in the sidebar).
+
+---
+
+## ⚙️ SPA‑like navigation
+Page transitions only replace the `<main>` content, keeping header and sidebar fixed. Scripts inside pages are re‑executed safely, so special pages (like Search) work when revisiting.
+
+---
+
+## 📦 Project layout (essentials)
 ```
 rhyla/
-  body/
-    introduction.md
-    quickstart.md
-    guide/
-      install.md
-      config.md
-    api/
-      auth.md
-      users.html
+   body/               # your docs (md/html)
+   public/             # static assets served at /public
+   styles/             # global + themes
+   header.html         # header + theme toggle + SPA runtime
+   footer.html         # footer (optional)
 ```
-Generated routes:
-```
-/introduction
-/quickstart
-/guide/install
-/guide/config
-/api/auth
-/api/users
-```
-
-### Naming best practices
-- Use lowercase and hyphens or camelCase: `advanced-install.md` or `advancedInstall.md`.
-- Avoid spaces and special characters.
-- Choose short, descriptive, and stable names.
-
-### When to use .md or .html
-| Situation | Use .md | Use .html |
-|-----------|---------|-----------|
-| Common text, narrative docs | ✅ | |
-| Code with simple formatting | ✅ | |
-| Fully custom layout | | ✅ |
-| Ready-made HTML components | | ✅ |
-
-### Extra tips
-- Start simple: create just a few `.md` files and check the navigation.
-- Need a special page (internal landing)? Create a `.html` in that folder.
-- Restructuring? Just move/rename folders/files and restart the server (or reload) to reflect changes.
-
---- 
-
-## ⚠️ Limitations
-- Navigation and structure depend on using .md or .html files.
-- The sidebar is generated based on the folder structure, so folder and file names define groups and topics.
-- The system does not automatically process external links in the menu.
-- For global layout changes, you need to edit header.html, footer.html, and theme styles.
-- No plugin or extension support at the moment.
 
 ---
 
-## 🔎 About Search and Indexing
-- All documentation pages (`.md` and `.html`) are automatically indexed and used in the search page (`/buscar`).
-- The search system relies on this index to provide fast and relevant results.
-- For correct operation, **do not delete or rename the search page** (`search.html` in `rhyla/body`).
-- The `home.md` file is required and must not be deleted, as it is the main entry page of your documentation. You should edit it to fit your project, but never remove it.
+## 🧩 FAQ (short)
+- Search shows “Loading index…” forever?
+   - Ensure the index exists (dev regenerates automatically; build writes to `/search/`).
+   - Keep the Search page file in `rhyla/body/`.
+- Can I use plain HTML pages?
+   - Yes. Place `.html` files anywhere under `body/`.
+- How do I deploy?
+   - Run `rhyla build` and upload `dist/` to any static host.
 
 ---
 
-## Contributing
-Contributions are welcome! Feel free to open issues or submit pull requests on the [GitHub repository](https://github.com/joseRibamar21/rhyla_documentation).
+## 🤝 Contributing
+PRs and issues are welcome: https://github.com/joseRibamar21/rhyla_documentation
 
-<img src="https://github.com/joseRibamar21.png" width="64" height="64" alt="joseRibamar21" style="border-radius:50%;margin-top:8px;" />
-
-
---- 
-
-## 📄 License
-This project is licensed under the MIT License. See the LICENSE file for more details.
-
---- 
-
-## 🔗 Project link
-[https://github.com/joseRibamar21/rhyla_documentation](https://github.com/joseRibamar21/rhyla_documentation)
