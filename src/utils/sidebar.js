@@ -44,7 +44,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       const dashIdx = topic.indexOf('-');
       label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
     }
-    const prefix = method ? tagHTML(method, label) : '📄 ' + topic;
+    const prefix = method ? tagHTML(method, label) : '| ' + topic;
     html += `<li class="${isActive ? 'active' : ''}"><a href="/${topic}.html">${prefix}</a></li>`;
   }
 
@@ -68,7 +68,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
           const dashIdx = topic.indexOf('-');
           label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
         }
-        const prefix = method ? tagHTML(method, label) : '📄 ' + topic;
+        const prefix = method ? tagHTML(method, label) : '| ' + topic;
         const href = `/${relUrl ? relUrl + '/' : ''}${topic}.html`;
         html += `<li class="${isActive ? 'active' : ''}"><a href="${href}">${prefix}</a></li>`;
       }
