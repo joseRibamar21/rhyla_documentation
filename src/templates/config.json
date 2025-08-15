@@ -1,4 +1,5 @@
 {
   "title": "Documentation Standard",
-  "description": "Generated with Rhyla"
+  "description": "Generated with Rhyla",
+  "side_topics": true
 }

@@ -69,6 +69,13 @@ export default function dev() {
     res.sendFile(idxPath);
   });
 
+  // Servir config.json no dev (para TOC e título dinâmico)
+  app.get('/config.json', (req, res) => {
+    const cfg = path.join(rhylaPath, 'config.json');
+    if (fs.existsSync(cfg)) return res.sendFile(cfg);
+    res.status(404).send('{}');
+  });
+
   // Ler header
   const header = fs.readFileSync(path.join(rhylaPath, "header.html"), "utf8");
 

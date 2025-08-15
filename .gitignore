@@ -5,4 +5,3 @@ build
 
 src/templates/scripts/search_index.js
 src/templates/scripts/search_index.json
-src/templates/scripts/header-runtime.js
