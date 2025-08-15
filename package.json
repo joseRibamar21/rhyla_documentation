@@ -1,11 +1,39 @@
 {
   "name": "rhyla",
-  "version": "1.0.0",
-  "description": "Gerador simples de documentação a partir de arquivos Markdown",
+  "version": "1.0.0-beta.1",
+  "description": "Simple, template-driven Markdown documentation generator (CLI)",
   "bin": {
     "rhyla": "./bin/cli.js"
   },
   "type": "module",
+  "license": "MIT",
+  "author": "José Ribamar Pilar de Araújo Neto",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joseRibamar21/rhyla_documentation.git"
+  },
+  "bugs": {
+    "url": "https://github.com/joseRibamar21/rhyla_documentation/issues"
+  },
+  "homepage": "https://github.com/joseRibamar21/rhyla_documentation#readme",
+  "keywords": [
+    "docs",
+    "documentation",
+    "markdown",
+    "static-site",
+    "cli",
+    "search",
+    "dark-mode"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "chalk": "^5.3.0",
     "chokidar": "^4.0.3",

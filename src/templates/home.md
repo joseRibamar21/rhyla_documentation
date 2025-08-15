@@ -58,7 +58,7 @@ Naming tips:
 ## 🎨 Theming & layout
 - Global layout: `styles/global.css`.
 - Themes: `styles/light.css` and `styles/dark.css` (variables + colors).
-- Header/Footer: edit `header.html` / `footer.html` as needed.
+- Header: edit `header.html` as needed.
 - HTTP verb tags are styled via `.http-tag` classes.
 
 Anti‑flicker: the selected theme is applied before first paint to avoid flashing.
@@ -88,7 +88,6 @@ rhyla/
    public/             # static assets served at /public
    styles/             # global + themes
    header.html         # header + theme toggle + SPA runtime
-   footer.html         # footer (optional)
 ```
 
 ---
