@@ -91,15 +91,22 @@ export default function build() {
 
   const headerInline = withInlineHeaderRuntime(header);
 
-  // Gerar home como index.html
-  const homePath = path.join(bodyPath, 'home.md');
-  if (fs.existsSync(homePath)) {
-    const content = md.render(fs.readFileSync(homePath, 'utf8'));
+  // Gerar home como index.html (aceita home.md ou home.html)
+  const homeMdPath = path.join(bodyPath, 'home.md');
+  const homeHtmlPath = path.join(bodyPath, 'home.html');
+  if (fs.existsSync(homeMdPath) || fs.existsSync(homeHtmlPath)) {
+    const content = fs.existsSync(homeMdPath)
+      ? md.render(fs.readFileSync(homeMdPath, 'utf8'))
+      : fs.readFileSync(homeHtmlPath, 'utf8');
     const sidebar = generateSidebarHTML(bodyPath, null, 'home');
-    fs.writeFileSync(
-      path.join(distPath, 'index.html'),
-      headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`
-    );
+    const pageHTML = headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`;
+    fs.writeFileSync(path.join(distPath, 'index.html'), pageHTML);
+    // Alias home.html na raiz
+    fs.writeFileSync(path.join(distPath, 'home.html'), pageHTML);
+    // Alias /home/index.html para URLs limpas
+    const homeDir = path.join(distPath, 'home');
+    fs.mkdirSync(homeDir, { recursive: true });
+    fs.writeFileSync(path.join(homeDir, 'index.html'), pageHTML);
   } else {
     const sidebar = generateSidebarHTML(bodyPath, null, null);
     fs.writeFileSync(
@@ -109,7 +116,6 @@ export default function build() {
   }
 
   const EXCLUDE = new Set([
-    'home.md', 'home.html',
     'notfound.html', 'notfound.md', 'notfound.htm', 'notfound',
     'search.html', '.search.html', 'search.md', '.search.md'
   ]);

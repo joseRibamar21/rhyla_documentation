@@ -81,13 +81,34 @@ export default function dev() {
 
   // Home
   app.get("/", (req, res) => {
-    const homePath = path.join(rhylaPath, "body", "home.md");
-    if (!fs.existsSync(homePath)) {
+    const homeMd = path.join(rhylaPath, "body", "home.md");
+    const homeHtml = path.join(rhylaPath, "body", "home.html");
+    let content = "";
+    if (fs.existsSync(homeMd)) {
+      content = md.render(fs.readFileSync(homeMd, "utf8"));
+    } else if (fs.existsSync(homeHtml)) {
+      content = fs.readFileSync(homeHtml, "utf8");
+    } else {
       const notFound = fs.existsSync(notFoundPath) ? fs.readFileSync(notFoundPath, "utf8") : "<h1>404</h1>";
       const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, null);
       return res.status(404).send(header + sidebar + `<main class="rhyla-main">${notFound}</main>`);
     }
-    const content = md.render(fs.readFileSync(homePath, "utf8"));
+    const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, "home");
+    res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
+  });
+
+  // Home aliases: /home e /home.html
+  app.get(["/home", "/home.html"], (req, res, next) => {
+    const homeMd = path.join(rhylaPath, "body", "home.md");
+    const homeHtml = path.join(rhylaPath, "body", "home.html");
+    let content = "";
+    if (fs.existsSync(homeMd)) {
+      content = md.render(fs.readFileSync(homeMd, "utf8"));
+    } else if (fs.existsSync(homeHtml)) {
+      content = fs.readFileSync(homeHtml, "utf8");
+    } else {
+      return next();
+    }
     const sidebar = generateSidebarHTML(path.join(rhylaPath, "body"), null, "home");
     res.send(header + sidebar + `<main class="rhyla-main">${content}</main>`);
   });
