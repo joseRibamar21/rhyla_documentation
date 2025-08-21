@@ -1,25 +1,41 @@
 (function () {
-  const themeToggle = document.getElementById('theme-toggle');
-  const themeLink = document.getElementById('theme-style');
+  // Usa prefixo definido no header (document.write) para suportar subpaths
+  const PREFIX = (typeof window !== 'undefined' && window.__rhyla_prefix__) || '/';
+
+  function onReady(cb){
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', cb);
+    else cb();
+  }
+
+  let themeToggle, themeLink;
+  onReady(() => {
+    themeToggle = document.getElementById('theme-toggle');
+    themeLink = document.getElementById('theme-style');
+  });
 
   function setTheme(theme) {
-    themeLink.href = '/styles/' + theme + '.css';
+    if (!themeLink) themeLink = document.getElementById('theme-style');
+    if (themeLink) themeLink.href = PREFIX + 'styles/' + theme + '.css';
     localStorage.setItem('rhyla-theme', theme);
-    themeToggle.textContent = theme === 'light' ? '🌙 Dark' : '☀️ Light';
+    if (!themeToggle) themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) themeToggle.textContent = theme === 'light' ? '🌙 Dark' : '☀️ Light';
   }
 
   const saved = localStorage.getItem('rhyla-theme') || 'light';
-  setTheme(saved);
-
-  themeToggle.addEventListener('click', () => {
-    const cur = localStorage.getItem('rhyla-theme') || 'light';
-    setTheme(cur === 'light' ? 'dark' : 'light');
+  onReady(() => {
+    setTheme(saved);
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.addEventListener('click', () => {
+      const cur = localStorage.getItem('rhyla-theme') || 'light';
+      setTheme(cur === 'light' ? 'dark' : 'light');
+    });
   });
 
   // Estado de configuração
   let RHYLA_CFG = { side_topics: false };
 
-  fetch('/config.json')
+  // Carrega config usando candidatos com e sem prefixo
+  fetch(PREFIX + 'config.json')
     .then(r => r.ok ? r.json() : null)
     .then(cfg => {
       if (cfg) {
@@ -42,7 +58,7 @@
     const url = new URL(a.href, location.origin);
     if (url.origin !== location.origin) return false;
     const p = url.pathname;
-    const excludes = [/\.(css|js|json|png|jpe?g|svg|gif|webp|ico|pdf|zip)(\?|#|$)/i, /^\/public\//, /^\/styles\//];
+  const excludes = [/\.(css|js|json|png|jpe?g|svg|gif|webp|ico|pdf|zip)(\?|#|$)/i, /^\/public\//, /^\/styles\//, /^\/scripts\//];
     if (excludes.some(rx => rx.test(p))) return false;
     return true;
   }
@@ -90,6 +106,27 @@
     } catch (_) { }
   }
 
+  // Reescreve hrefs da sidebar para respeitar o PREFIX quando hospedado em subpath
+  function fixSidebarLinks() {
+    try {
+      const sb = document.querySelector('.rhyla-sidebar');
+      if (!sb) return;
+      const as = sb.querySelectorAll('a[href]');
+      as.forEach(a => {
+        const raw = a.getAttribute('href') || '';
+        if (!raw || raw.startsWith('#') || /^(https?:)?\/\//i.test(raw) || raw.startsWith('mailto:')) return;
+        let newHref = raw;
+        if (raw.startsWith('/')) {
+          newHref = PREFIX + raw.replace(/^\/+/, '');
+        } else {
+          // relativo → torna relativo à raiz do site (PREFIX)
+          newHref = PREFIX + raw.replace(/^\.?\/?/, '');
+        }
+        a.setAttribute('href', newHref);
+      });
+    } catch(_) { /* noop */ }
+  }
+
   function swapMainFromHTML(html, newUrl, doPush) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const newMain = doc.querySelector('main.rhyla-main');
@@ -98,6 +135,7 @@
     main.innerHTML = newMain.innerHTML;
     executeScripts(main);
   if (newUrl && doPush) history.pushState({}, '', newUrl);
+  fixSidebarLinks();
   updateActiveSidebar(newUrl || location.pathname);
     main.scrollTop = 0;
   // Regerar TOC após navegação SPA e rolar para a query, se houver
@@ -133,20 +171,23 @@
   });
 
   // ===== Global Search Overlay =====
-  const overlay = document.getElementById('search-overlay');
-  const openBtn = document.getElementById('search-open');
-  const closeBtn = document.getElementById('search-close');
-  const input = document.getElementById('search-input');
-  const meta = document.getElementById('search-meta');
-  const resultsDiv = document.getElementById('search-results');
+  let overlay, openBtn, closeBtn, input, meta, resultsDiv;
+  onReady(() => {
+    overlay = document.getElementById('search-overlay');
+    openBtn = document.getElementById('search-open');
+    closeBtn = document.getElementById('search-close');
+    input = document.getElementById('search-input');
+    meta = document.getElementById('search-meta');
+    resultsDiv = document.getElementById('search-results');
+  });
 
   let searchIndex = Array.isArray(window.__SEARCH_INDEX__) ? window.__SEARCH_INDEX__ : [];
   if (!searchIndex.length && meta) meta.textContent = 'Loading index…';
 
   async function ensureIndexLoaded() {
     if (searchIndex.length) return;
-    const basePath = location.pathname.endsWith('/') ? location.pathname : (location.pathname + '/');
-    const candidates = ['/search_index.json', basePath + 'search_index.json'];
+  const basePath = location.pathname.endsWith('/') ? location.pathname : (location.pathname.replace(/[^\/]*$/, ''));
+  const candidates = [PREFIX + 'search_index.json', basePath + 'search_index.json'];
     for (const url of candidates) {
       try {
         const res = await fetch(url);
@@ -227,10 +268,12 @@
     if (resultsDiv) resultsDiv.innerHTML = '';
   }
 
-  if (openBtn) openBtn.addEventListener('click', openOverlay);
-  if (closeBtn) closeBtn.addEventListener('click', closeOverlay);
-  if (overlay) overlay.addEventListener('click', (e) => { if (e.target && e.target.hasAttribute('data-close-overlay')) closeOverlay(); });
-  if (input) input.addEventListener('input', onInput);
+  onReady(() => {
+    if (openBtn) openBtn.addEventListener('click', openOverlay);
+    if (closeBtn) closeBtn.addEventListener('click', closeOverlay);
+    if (overlay) overlay.addEventListener('click', (e) => { if (e.target && e.target.hasAttribute('data-close-overlay')) closeOverlay(); });
+    if (input) input.addEventListener('input', onInput);
+  });
   // Fecha o overlay ao clicar em um resultado (antes do handler global de navegação)
   if (resultsDiv) resultsDiv.addEventListener('click', (e) => {
     const a = e.target && e.target.closest && e.target.closest('a');
@@ -390,10 +433,9 @@
   }
 
   // Scroll inicial quando a página carrega
-  if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => { updateActiveSidebar(location.pathname); scrollToQueryIfAny(); });
-  } else {
-  updateActiveSidebar(location.pathname);
-  scrollToQueryIfAny();
-  }
+  onReady(() => {
+    updateActiveSidebar(location.pathname);
+  fixSidebarLinks();
+    scrollToQueryIfAny();
+  });
 })();

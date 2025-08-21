@@ -42,6 +42,13 @@ export default function build() {
   const scriptsSrc = path.join(templatesPath, 'scripts');
   const searchScript = path.join(scriptsSrc, 'generateSearchIndex.js');
 
+  // Copiar scripts para o build (necessário para header-runtime.js em produção)
+  const scriptsDst = path.join(distPath, 'scripts');
+  if (fs.existsSync(scriptsSrc)) {
+    fs.mkdirSync(scriptsDst, { recursive: true });
+    fs.cpSync(scriptsSrc, scriptsDst, { recursive: true });
+  }
+
   // Gerar índice de busca
   if (fs.existsSync(searchScript)) {
     console.log('🔍 Gerando índice de busca...');
@@ -58,15 +65,34 @@ export default function build() {
     fs.copyFileSync(searchJsonSrc, searchJsonDst);
   }
 
-  // Copiar config.json para dist, para o header funcionar no build estático
+  // Copiar config.json para dist e ler basePath se definido
   const cfgSrc = path.join(rhylaPath, 'config.json');
   const cfgDst = path.join(distPath, 'config.json');
+  let basePath = '/';
   if (fs.existsSync(cfgSrc)) {
     fs.copyFileSync(cfgSrc, cfgDst);
+    try {
+      const cfgObj = JSON.parse(fs.readFileSync(cfgSrc, 'utf8'));
+      if (cfgObj && typeof cfgObj.base === 'string' && cfgObj.base.trim()) {
+        basePath = cfgObj.base.trim();
+      }
+    } catch (_) { /* ignore parse errors */ }
   }
+  // Normaliza basePath
+  if (!basePath.startsWith('/')) basePath = '/' + basePath;
+  if (!basePath.endsWith('/')) basePath += '/';
 
   // Ler header/footer e notFound da pasta rhyla/body
-  const header = fs.readFileSync(path.join(rhylaPath, 'header.html'), 'utf8');
+  let header = fs.readFileSync(path.join(rhylaPath, 'header.html'), 'utf8');
+  // Injeta meta com base configurada (usado pelo prefix writer do header)
+  if (!/meta\s+name=["']rhyla-base["']/i.test(header)) {
+    const metaTag = `\n  <meta name="rhyla-base" content="${basePath}">\n`;
+    if (/<meta[^>]+name=["']viewport["'][^>]*>/i.test(header)) {
+      header = header.replace(/(<meta[^>]+name=["']viewport["'][^>]*>)/i, `$1${metaTag}`);
+    } else if (/<head[^>]*>/i.test(header)) {
+      header = header.replace(/<head[^>]*>/i, (m) => m + metaTag);
+    }
+  }
   const notFoundTemplatePath = path.join(rhylaPath, 'body', 'notFound.html');
   const notFoundHTML = fs.existsSync(notFoundTemplatePath)
     ? fs.readFileSync(notFoundTemplatePath, 'utf8')
@@ -76,17 +102,39 @@ export default function build() {
 
   function withInlineHeaderRuntime(html) {
     try {
+      // Se o header já é prefix-aware, não faça nada
+      if (html.includes('__rhyla_prefix__')) {
+        // Mesmo prefix-aware, vamos ainda inlinear o runtime se houver referência externa
+        const runtimePath = path.join(templatesPath, 'scripts', 'header-runtime.js');
+        if (!fs.existsSync(runtimePath)) return html;
+        const runtimeRaw = fs.readFileSync(runtimePath, 'utf8');
+        const runtime = runtimeRaw.replace(/<\/script>/gi, '<\\/script>');
+        return html.replace(
+          /<script\s+src=["'](?:\/?|[^"']*)scripts\/header-runtime\.js["']><\/script>/i,
+          () => `<script>\n${runtime}\n<\/script>`
+        );
+      }
+
+      // Caso legado: remover blocos antigos e injetar writer + inline do runtime
+      const prefixWriter = `\n<script>(function(){try{var base=location.pathname.replace(/index\\.html$/, '');if(!base||base==='\/')base='\/';var prefix=base.endsWith('/')?base:base+'\/';window.__rhyla_prefix__=prefix;var saved=localStorage.getItem('rhyla-theme')||'light';document.write('<link rel=\"stylesheet\" href=\"'+prefix+'styles/global.css\">');document.write('<link id=\"theme-style\" rel=\"stylesheet\" href=\"'+prefix+'styles/'+(saved==='dark'?'dark':'light')+'.css\">');}catch(e){document.write('<link rel=\"stylesheet\" href=\"/styles/global.css\">');document.write('<link id=\"theme-style\" rel=\"stylesheet\" href=\"/styles/light.css\">');}})();<\/script>\n`;
+
+      let out = html
+        .replace(/\n?\s*<link[^>]+href=["']\/?styles\/global\.css["'][^>]*>\s*/i, '\n')
+        .replace(/\n?\s*<!--\s*Tema[\s\S]*?<script>[\s\S]*?<\/script>\s*/i, '\n')
+        .replace(/<\/head>/i, prefixWriter + '</head>');
+
       const runtimePath = path.join(templatesPath, 'scripts', 'header-runtime.js');
-      if (!fs.existsSync(runtimePath)) return html;
-  // Protege contra fechamentos prematuros de </script> no conteúdo
-  const runtimeRaw = fs.readFileSync(runtimePath, 'utf8');
-  const runtime = runtimeRaw.replace(/<\/script>/gi, '<\\/script>');
-      // Use uma função de substituição para impedir que tokens como $& sejam processados pelo String.replace
-      return html.replace(
-        /<script\s+src=["']\/scripts\/header-runtime\.js["']><\/script>/i,
+      if (!fs.existsSync(runtimePath)) return out;
+      const runtimeRaw = fs.readFileSync(runtimePath, 'utf8');
+      const runtime = runtimeRaw.replace(/<\/script>/gi, '<\\/script>');
+      out = out.replace(
+        /<script\s+src=["'](?:\/?|[^"']*)scripts\/header-runtime\.js["']><\/script>/i,
         () => `<script>\n${runtime}\n<\/script>`
       );
-    } catch { return html; }
+      return out;
+    } catch {
+      return html;
+    }
   }
 
   const headerInline = withInlineHeaderRuntime(header);

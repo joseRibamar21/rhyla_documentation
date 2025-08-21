@@ -43,7 +43,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
     }
     const prefix = method ? tagHTML(method, label) : '| ' + topic;
-    html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="/${topic}.html">${prefix}</a></li>`;
+    html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="${topic}.html">${prefix}</a></li>`;
   }
 
   // Render recursivo de diretórios
@@ -67,7 +67,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
           label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
         }
         const prefix = method ? tagHTML(method, label) : '| ' + topic;
-        const href = `/${relUrl ? relUrl + '/' : ''}${topic}.html`;
+      const href = `${relUrl ? relUrl + '/' : ''}${topic}.html`;
         html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="${href}">${prefix}</a></li>`;
       }
     }
