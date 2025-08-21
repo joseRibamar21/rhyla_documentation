@@ -20,7 +20,7 @@ export default function build() {
     process.exit(1);
   }
 
-  const md = new markdownIt();
+  // markdown-it will be instantiated after reading config so we can control html option
 
   // Limpar dist e recriar
   if (fs.existsSync(distPath)) fs.rmSync(distPath, { recursive: true });
@@ -81,6 +81,18 @@ export default function build() {
   // Normaliza basePath
   if (!basePath.startsWith('/')) basePath = '/' + basePath;
   if (!basePath.endsWith('/')) basePath += '/';
+
+  // Ler opção de segurança: permitir HTML cru em .md/.html por configuração
+  let allowRawHtml = false;
+  try {
+    if (fs.existsSync(cfgSrc)) {
+      const cfgObj = JSON.parse(fs.readFileSync(cfgSrc, 'utf8'));
+      if (cfgObj && cfgObj.allow_raw_html === true) allowRawHtml = true;
+    }
+  } catch (_) { /* ignore */ }
+
+  // Instancia markdown-it com html controlado (desabilita por padrão)
+  const md = new markdownIt({ html: Boolean(allowRawHtml) });
 
   // Ler header/footer e notFound da pasta rhyla/body
   let header = fs.readFileSync(path.join(rhylaPath, 'header.html'), 'utf8');
@@ -193,6 +205,13 @@ export default function build() {
         content = md.render(fs.readFileSync(itemPath, 'utf8'));
       } else {
         content = fs.readFileSync(itemPath, 'utf8');
+      }
+
+      // Sanitize included raw HTML files unless allowRawHtml is true
+      if (!allowRawHtml && item.name.endsWith('.html')) {
+        // Very small sanitizer: remove <script> blocks and on* attributes
+        content = content.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
+        content = content.replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
       }
 
       const sidebar = generateSidebarHTML(bodyPath, group, topic);

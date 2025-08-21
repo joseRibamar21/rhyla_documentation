@@ -193,7 +193,11 @@
         const res = await fetch(url);
         if (!res.ok) continue;
         const data = await res.json();
-        if (Array.isArray(data)) { searchIndex = data; break; }
+        if (Array.isArray(data)) {
+          // Basic sanitize of indexed content to avoid rendering raw HTML in snippets
+          searchIndex = data.map(p => ({ ...p, content: String(p.content || '').replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '').replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '') }));
+          break;
+        }
       } catch (_) { /* next */ }
     }
     if (meta) meta.textContent = searchIndex.length ? `${searchIndex.length} pages indexed` : 'No pages indexed';
@@ -242,11 +246,25 @@
     resultsDiv.innerHTML = '';
     if (!results.length) { if (meta) meta.textContent = 'Nenhum resultado encontrado'; return; }
     if (meta) meta.textContent = `${results.length} resultado(s)`;
+    // Escapa HTML para prevenir XSS em snippets/resultados
+    function escapeHtml(s){
+      return String(s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
+
     results.forEach(r => {
       const div = document.createElement('div');
       div.className = 'result';
       const href = buildRouteWithQuery(r.route, q);
-      div.innerHTML = `<a href="${href}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
+      const a = document.createElement('a');
+      a.setAttribute('href', href);
+      a.textContent = r.label;
+      const sn = document.createElement('div');
+      sn.className = 'snippet';
+      // highlight() returns HTML with <mark>; allow marks only by escaping then replacing safe tags
+      const safeSnippet = escapeHtml(r.snippet).replace(/&lt;mark&gt;(.*?)&lt;\/mark&gt;/gi, '<mark>$1</mark>');
+      sn.innerHTML = '… ' + safeSnippet + ' …';
+      div.appendChild(a);
+      div.appendChild(sn);
       resultsDiv.appendChild(div);
     });
   }
