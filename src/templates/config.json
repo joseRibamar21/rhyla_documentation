@@ -1,5 +1,6 @@
 {
   "title": "Documentation Standard",
   "description": "Generated with Rhyla",
-  "side_topics": true
+  "side_topics": true,
+  "allow_raw_html": false 
 }
