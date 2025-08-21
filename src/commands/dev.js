@@ -76,7 +76,7 @@ export default function dev() {
     res.status(404).send('{}');
   });
 
-  // Ler header
+  // Ler header (já prefix-aware e com carregamento de runtime via document.write no client)
   const header = fs.readFileSync(path.join(rhylaPath, "header.html"), "utf8");
 
   // Home
