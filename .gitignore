@@ -2,6 +2,7 @@ node_modules
 rhyla
 dist
 build
+.env
 
 src/templates/scripts/search_index.js
 src/templates/scripts/search_index.json
