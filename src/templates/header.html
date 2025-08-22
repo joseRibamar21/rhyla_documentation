@@ -5,32 +5,45 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Documentação</title>
-  <!-- CSS global que controla layout -->
-  <link rel="stylesheet" href="./styles/global.css">
-  <!-- Tema (anti-flicker): aplica o tema salvo antes do primeiro paint -->
+  <!-- CSS fixo: global.css (sempre necessário) + tema padrão light.css -->
+  <link rel="stylesheet" href="/styles/global.css">
+  <link id="theme-style" rel="stylesheet" href="/styles/light.css">
+  <!-- Script crítico que corrige os caminhos CSS antes da página renderizar completamente -->
   <script>
     (function () {
-      try {
-        // Determinar o prefixo base a partir da meta tag ou calcular
-        var getPrefix = function() {
+      // Função de inicialização imediata para corrigir caminhos CSS antes de qualquer renderização
+      function fixCssUrls() {
+        try {
+          // 1. Detecta o prefixo base
           var metaBase = document.querySelector('meta[name="rhyla-base"]');
+          var prefix = '/';
           if (metaBase && metaBase.getAttribute('content')) {
-            var base = metaBase.getAttribute('content');
-            return base.endsWith('/') ? base : base + '/';
+            prefix = metaBase.getAttribute('content');
+            if (!prefix.endsWith('/')) prefix += '/';
           }
-          return './';
-        };
-        
-        var prefix = getPrefix();
-        var saved = localStorage.getItem('rhyla-theme') || 'light';
-        var link = document.createElement('link');
-        link.id = 'theme-style';
-        link.rel = 'stylesheet';
-        link.href = prefix + 'styles/' + (saved === 'dark' ? 'dark' : 'light') + '.css';
-        document.write(link.outerHTML);
-      } catch (e) {
-        document.write('<link id="theme-style" rel="stylesheet" href="./styles/light.css">');
+          
+          // 2. Corrige imediatamente os links CSS
+          var globalCss = document.querySelector('link[href$="/styles/global.css"]');
+          var themeCss = document.getElementById('theme-style');
+          
+          if (globalCss) {
+            globalCss.href = prefix + 'styles/global.css';
+          }
+          
+          if (themeCss) {
+            var saved = localStorage.getItem('rhyla-theme') || 'light';
+            themeCss.href = prefix + 'styles/' + (saved === 'dark' ? 'dark' : 'light') + '.css';
+          }
+          
+          // 3. Armazena o prefixo para outros scripts
+          window.__rhyla_prefix__ = prefix;
+        } catch (e) {
+          console.error('Erro ao ajustar caminhos CSS:', e);
+        }
       }
+      
+      // Executa imediatamente para evitar FOUC (flash of unstyled content)
+      fixCssUrls();
     })();
   </script>
 </head>
@@ -38,14 +51,14 @@
 <body>
   <header class="rhyla-header">
     <div class="rhyla-brand">
-      <!-- Logo com caminho relativo baseado no PREFIX -->
-      <img id="rhyla-logo" src="./public/logo.png" alt="Logo da Documentação" style="height:100px;width:auto;" onload="this.src=this.getAttribute('data-src')||this.src" data-src="">
+      <!-- Logo com caminho absoluto baseado no PREFIX -->
+      <img id="rhyla-logo" src="/public/logo.png" alt="Logo da Documentação" style="height:100px;width:auto;" onload="this.src=this.getAttribute('data-src')||this.src" data-src="">
       <script>
         (function() {
           try {
             var logo = document.getElementById('rhyla-logo');
             var metaBase = document.querySelector('meta[name="rhyla-base"]');
-            var prefix = './';
+            var prefix = '/';
             if (metaBase && metaBase.getAttribute('content')) {
               prefix = metaBase.getAttribute('content');
               if (!prefix.endsWith('/')) prefix += '/';
@@ -78,5 +91,23 @@
     </div>
   </div>
 
-  <script src="./scripts/header-runtime.js"></script>
-  <script src="./scripts/search-runtime.js"></script>
+  <script>
+    (function() {
+      // Função para carregar scripts com o prefixo correto
+      function loadScript(src, async) {
+        try {
+          var prefix = window.__rhyla_prefix__ || '/';
+          var scriptElement = document.createElement('script');
+          scriptElement.src = prefix + src.replace(/^\//g, '');
+          if (async) scriptElement.async = true;
+          document.body.appendChild(scriptElement);
+        } catch (e) {
+          console.error('Erro ao carregar script:', src, e);
+        }
+      }
+      
+      // Carregar scripts essenciais com o prefixo correto
+      loadScript('scripts/header-runtime.js');
+      loadScript('scripts/search-runtime.js');
+    })();
+  </script>

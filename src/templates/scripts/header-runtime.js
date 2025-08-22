@@ -16,10 +16,44 @@
     return '/';
   }
   
-  const PREFIX = getPrefix();
+  // Usar PREFIX já definido no header para consistência
+  const PREFIX = window.__rhyla_prefix__ || getPrefix();
   
-  // Expor o PREFIX globalmente para que outros scripts como search-runtime.js possam utilizá-lo
+  // Garantir que PREFIX esteja disponível globalmente para outros scripts
   window.__rhyla_prefix__ = PREFIX;
+  
+  // Corrigir imediatamente qualquer URL do CSS antes de continuar
+  (function fixCssPathsImmediate() {
+    // Corrigir todos os links CSS
+    const links = document.querySelectorAll('link[rel="stylesheet"]');
+    for (let i = 0; i < links.length; i++) {
+      const link = links[i];
+      const href = link.getAttribute('href');
+      
+      if (href) {
+        // Garantir que caminhos para pasta styles sejam absolutos
+        if (href.includes('styles/') && !href.includes(PREFIX)) {
+          // Extrair o nome do arquivo CSS
+          const parts = href.split('/');
+          const filename = parts[parts.length - 1];
+          
+          // Reconstruir URL com prefixo correto
+          link.href = PREFIX + 'styles/' + filename;
+        } 
+        // Para qualquer outro CSS com caminho relativo
+        else if (!href.startsWith('/') && !href.startsWith('http')) {
+          link.href = PREFIX + href.replace(/^\.\//, '');
+        }
+      }
+    }
+    
+    // Garantir que o tema esteja correto
+    const themeCss = document.getElementById('theme-style');
+    if (themeCss) {
+      const saved = localStorage.getItem('rhyla-theme') || 'light';
+      themeCss.href = PREFIX + 'styles/' + saved + '.css';
+    }
+  })();
 
   function onReady(cb){
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', cb);
@@ -30,11 +64,32 @@
   onReady(() => {
     themeToggle = document.getElementById('theme-toggle');
     themeLink = document.getElementById('theme-style');
+    
+    // Garantir que os caminhos CSS estejam corretos após DOM estar pronto
+    if (themeLink) {
+      const saved = localStorage.getItem('rhyla-theme') || 'light';
+      setTheme(saved);
+    }
   });
 
   function setTheme(theme) {
     if (!themeLink) themeLink = document.getElementById('theme-style');
-    if (themeLink) themeLink.href = PREFIX + 'styles/' + theme + '.css';
+    // Garantir que esteja usando o caminho absoluto com o PREFIX
+    if (themeLink) {
+      // Usar URL absoluta baseada no PREFIX, garantindo formato correto
+      let prefix = PREFIX;
+      if (!prefix.endsWith('/')) prefix += '/';
+      
+      // Constroi URL absoluta para o tema
+      const absoluteUrl = prefix + 'styles/' + theme + '.css';
+      
+      // Atribuir diretamente ao href para evitar problemas de resolução de URL
+      themeLink.href = absoluteUrl;
+      
+      // Log para debug
+      console.log(`[Rhyla] Tema alterado para ${theme}, URL: ${absoluteUrl}`);
+    }
+    
     localStorage.setItem('rhyla-theme', theme);
     if (!themeToggle) themeToggle = document.getElementById('theme-toggle');
     if (themeToggle) themeToggle.textContent = theme === 'light' ? '🌙 Dark' : '☀️ Light';
