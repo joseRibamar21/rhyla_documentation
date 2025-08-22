@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 export default function build() {
   const root = process.cwd();
-  const rhylaPath = path.join(root, 'rhyla');
+  const rhylaPath = path.join(root, 'rhyla-docs'); // Alterado para rhyla-docs para evitar conflito
   const distPath = path.join(root, 'dist');
   // Corrige para src/templates (relativo a src/commands)
   const templatesPath = path.join(__dirname, '../templates');

@@ -46,7 +46,7 @@ function createHiddenFile(filePath) {
 
 export default function init() {
   const root = process.cwd();
-  const rhylaPath = path.join(root, 'rhyla');
+  const rhylaPath = path.join(root, 'rhyla-docs'); // Alterado para rhyla-docs para evitar conflito
   const templatesPath = path.join(__dirname, '../templates');
 
   if (!fs.existsSync(templatesPath)) {

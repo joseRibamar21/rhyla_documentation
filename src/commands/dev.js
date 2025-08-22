@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 export default function dev() {
   const app = express();
   const md = new markdownIt();
-  const rhylaPath = path.join(process.cwd(), "rhyla");
+  const rhylaPath = path.join(process.cwd(), "rhyla-docs"); // Alterado para rhyla-docs para evitar conflito
 
   // Scripts agora ficam em src/templates/scripts
   const scriptsFolderPath = path.join(__dirname, "../templates/scripts");
