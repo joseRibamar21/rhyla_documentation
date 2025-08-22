@@ -23,6 +23,9 @@
   }
   
   const PREFIX = getPrefix();
+  
+  // Expor o PREFIX globalmente para que outros scripts como search-runtime.js possam utilizá-lo
+  window.__rhyla_prefix__ = PREFIX;
 
   function onReady(cb){
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', cb);
