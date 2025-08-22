@@ -3,5 +3,5 @@
   "description": "Generated with Rhyla",
   "side_topics": true,
   "allow_raw_html": false,
-  "base": "/docs"
+  "base": "/"
 }

@@ -1,11 +1,5 @@
 (function () {
-  // Usa prefixo definido no header (document.write) para suportar subpaths
   function getPrefix() {
-    // Prioridade:
-    // 1. Meta tag rhyla-base (definida no build)
-    // 2. window.__rhyla_prefix__ (definida pelo script inline)
-    // 3. Obtém da config.json (se disponível)
-    // 4. Fallback para '/'
     try {
       const meta = document.querySelector('meta[name="rhyla-base"]');
       if (meta && meta.getAttribute('content')) {
@@ -268,13 +262,81 @@
     if (!newMain || !main) return false;
     main.innerHTML = newMain.innerHTML;
     executeScripts(main);
-  if (newUrl && doPush) history.pushState({}, '', newUrl);
-  fixSidebarLinks();
-  updateActiveSidebar(newUrl || location.pathname);
-    main.scrollTop = 0;
-  // Regerar TOC após navegação SPA e rolar para a query, se houver
-  if (RHYLA_CFG.side_topics) generateRightTOC();
-  scrollToQueryIfAny();
+    
+    // Extrair o hash da URL (âncora) e o parâmetro de consulta
+    let hash = '';
+    let hasQuery = false;
+    try {
+      const url = new URL(newUrl, location.origin);
+      hash = url.hash;
+      hasQuery = url.searchParams.has('query');
+    } catch (e) {
+      // Fallback para extração básica se URL não for válida
+      hash = newUrl.includes('#') ? '#' + newUrl.split('#')[1] : '';
+      hasQuery = newUrl.includes('?query=');
+    }
+    
+    // Atualiza o histórico, sidebar e TOC
+    if (newUrl && doPush) history.pushState({}, '', newUrl);
+    fixSidebarLinks();
+    updateActiveSidebar(newUrl || location.pathname);
+    
+    // Regenera TOC após navegação SPA
+    if (RHYLA_CFG.side_topics) generateRightTOC();
+    
+    // Sistema de rolagem aprimorado com múltiplos atrasos para garantir que o DOM esteja pronto
+    const scrollToTarget = (attempt = 1) => {
+      // Prioridade de rolagem:
+      // 1. Se tem hash/âncora, rola para o elemento
+      if (hash) {
+        try {
+          const el = document.querySelector(hash);
+          if (el) {
+            try { 
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch (_) { 
+              el.scrollIntoView();
+            }
+            // Destaca o elemento
+            el.classList.add('rh-scroll-highlight');
+            setTimeout(() => el.classList.remove('rh-scroll-highlight'), 1800);
+            return true;
+          }
+        } catch (e) {
+          console.error('Erro ao rolar para âncora:', e);
+        }
+      }
+      
+      // 2. Se tem query string, usa scrollToQueryIfAny para encontrar o texto
+      if (hasQuery) {
+        setTimeout(() => scrollToQueryIfAny(), 10);
+        return true;
+      }
+      
+      // 3. Se nenhum dos acima, ou se houve falha, rola para o topo
+      if (attempt === 1) {
+        main.scrollTop = 0;
+      }
+      
+      return false;
+    };
+    
+    // Tenta rolar imediatamente
+    const success = scrollToTarget();
+    
+    // Se não teve sucesso ou precisamos garantir, tenta novamente após um atraso
+    if (!success || hash || hasQuery) {
+      // Primeira tentativa após DOM ser atualizado
+      setTimeout(() => {
+        if (!scrollToTarget(2) && (hash || hasQuery)) {
+          // Segunda tentativa se ainda não encontrou elemento
+          setTimeout(() => {
+            scrollToTarget(3);
+          }, 250);
+        }
+      }, 50);
+    }
+    
     return true;
   }
 
@@ -357,7 +419,7 @@
     // Quando voltar/avançar no histórico, manter navegação relativa correta
     const currentPath = location.pathname + location.search + location.hash;
     navigate(currentPath, false);
-    setTimeout(scrollToQueryIfAny, 0);
+    // O scrollToQueryIfAny será chamado por swapMainFromHTML quando necessário
   });
 
   // ===== Global Search Overlay =====
@@ -624,23 +686,84 @@
   }
 
   function scrollToQueryIfAny() {
+    // Primeiro verifica se tem hash (âncora específica) na URL
+    if (location.hash) {
+      const id = location.hash.substring(1);
+      const el = document.getElementById(id);
+      if (el) {
+        setTimeout(() => {
+          try { 
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' }); 
+          } catch(_) { 
+            el.scrollIntoView(); 
+          }
+          
+          // Destaca visualmente o elemento
+          el.classList.add('rh-scroll-highlight');
+          setTimeout(() => el.classList.remove('rh-scroll-highlight'), 1800);
+        }, 50);
+        
+        return; // Se encontrou por âncora, não precisa procurar por query
+      }
+    }
+    
+    // Se não encontrou por âncora, tenta por query parameter
     const q = readQueryParam();
     if (!q) return;
+    
+    // Função para destacar e rolar para um elemento
+    const highlightAndScroll = (element) => {
+      if (!element) return false;
+      
+      try { 
+        // Rola suavemente para o elemento e o centraliza
+        element.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        }); 
+      } catch(e) { 
+        // Fallback para navegadores que não suportam opções
+        element.scrollIntoView(); 
+      }
+      
+      // Adiciona uma classe de destaque temporariamente
+      element.classList.add('rh-scroll-highlight');
+      setTimeout(() => element.classList.remove('rh-scroll-highlight'), 1800);
+      
+      return true;
+    };
+    
+    // Primeiro tenta encontrar um título (h1-h6) com texto que contenha a consulta
+    const headings = Array.from(document.querySelectorAll('main.rhyla-main h1, main.rhyla-main h2, main.rhyla-main h3, main.rhyla-main h4, main.rhyla-main h5, main.rhyla-main h6'));
+    const queryNormalized = normalizeText(q);
+    
+    // Procura por cabeçalho que corresponda à consulta
+    for (const heading of headings) {
+      const headingText = normalizeText(heading.textContent || heading.innerText);
+      if (headingText.includes(queryNormalized)) {
+        if (highlightAndScroll(heading)) return;
+        break;
+      }
+    }
+    
+    // Se não achou cabeçalho, procura por qualquer elemento com o texto
     let el = findFirstMatchElement(q);
     if (el) {
-      try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_) { el.scrollIntoView(); }
-      el.classList.add('rh-scroll-highlight');
-      setTimeout(() => el.classList.remove('rh-scroll-highlight'), 1800);
+      highlightAndScroll(el);
     } else {
-      // Tenta novamente após um pequeno atraso (conteído assíncrono ou imagens afetando layout)
+      // Tenta novamente após um pequeno atraso (conteúdo assíncrono ou imagens afetando layout)
       setTimeout(() => {
         const el2 = findFirstMatchElement(q);
         if (el2) {
-          try { el2.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch(_) { el2.scrollIntoView(); }
-          el2.classList.add('rh-scroll-highlight');
-          setTimeout(() => el2.classList.remove('rh-scroll-highlight'), 1800);
+          highlightAndScroll(el2);
+        } else {
+          // Tenta uma última vez com um atraso maior se ainda não encontrou
+          setTimeout(() => {
+            const el3 = findFirstMatchElement(q);
+            if (el3) highlightAndScroll(el3);
+          }, 300);
         }
-      }, 120);
+      }, 150);
     }
   }
 

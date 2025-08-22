@@ -98,16 +98,72 @@
             return (page.route || '').replace(/^\//, '') || 'Untitled';
         }
 
+        // Função para extrair uma âncora de texto para rolagem
+        function extractAnchorFromText(text, query) {
+            // Procura por cabeçalhos no texto que contenham a consulta
+            const headingRegex = /#{1,6}\s+(.*?)\s*(?:\n|$)/g;
+            const headings = [];
+            let match;
+            
+            // Normaliza para comparação insensível a acentos e maiúsculas
+            function normalizeText(s) {
+                return String(s || '').normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase();
+            }
+            
+            // Função para criar um ID de âncora do texto do cabeçalho (mesma lógica usada no header-runtime.js)
+            function slugify(text) {
+                return String(text || '')
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^a-z0-9\s-]/g, '')
+                    .replace(/\s+/g, '-')
+                    .replace(/-+/g, '-');
+            }
+            
+            const normalizedQuery = normalizeText(query);
+            
+            // Extrai todos os cabeçalhos do texto
+            while ((match = headingRegex.exec(text)) !== null) {
+                const headingText = match[1];
+                const normalizedHeading = normalizeText(headingText);
+                
+                if (normalizedHeading.includes(normalizedQuery)) {
+                    // Usa a mesma função de slugify do header-runtime para compatibilidade
+                    const anchor = slugify(headingText);
+                    headings.push(anchor);
+                }
+            }
+            
+            // Procura também por cabeçalhos em HTML (h1-h6) com o texto
+            const htmlHeadingRegex = /<h([1-6])[^>]*>(.*?)<\/h\1>/gi;
+            while ((match = htmlHeadingRegex.exec(text)) !== null) {
+                const headingText = match[2].replace(/<[^>]+>/g, ''); // Remove tags HTML internas
+                const normalizedHeading = normalizeText(headingText);
+                
+                if (normalizedHeading.includes(normalizedQuery)) {
+                    const anchor = slugify(headingText);
+                    headings.push(anchor);
+                }
+            }
+            
+            // Retorna a primeira âncora encontrada ou vazio
+            return headings.length > 0 ? headings[0] : '';
+        }
+        
         function search(query) {
             const q = query.trim();
             if (!q) { if (resultsDiv) resultsDiv.innerHTML = ''; if (meta) meta.textContent = index.length ? `${index.length} pages indexed` : 'No pages indexed'; return; }
             const results = [];
             const ql = q.toLowerCase();
+            
             index.forEach(page => {
                 if (!page || !page.content) return;
                 const hay = String(page.content).toLowerCase();
                 const matchIndex = hay.indexOf(ql);
                 if (matchIndex !== -1) {
+                    // Extrai trecho para exibição
                     const snippetRaw = String(page.content);
                     const start = Math.max(0, matchIndex - 40);
                     const end = Math.min(snippetRaw.length, matchIndex + 40);
@@ -122,11 +178,23 @@
                         route = '/' + route.split('/').filter(Boolean).join('/');
                     }
                     
-                    results.push({ 
+                    // Tenta encontrar uma âncora para rolagem
+                    const headingId = extractAnchorFromText(page.content, q);
+                    
+                    // Cria um objeto de resultado enriquecido com informações para rolagem
+                    const resultItem = { 
                         route: route, 
                         label: formatLabel(page), 
-                        snippet: highlight(snippet, q) 
-                    });
+                        snippet: highlight(snippet, q),
+                        matchText: q  // Sempre inclui o texto da busca para rolagem
+                    };
+                    
+                    // Adiciona ID de cabeçalho se encontrou
+                    if (headingId) {
+                        resultItem.headingId = headingId;
+                    }
+                    
+                    results.push(resultItem);
                 }
             });
             displayResults(results);
@@ -137,48 +205,85 @@
             resultsDiv.innerHTML = '';
             if (!results.length) { if (meta) meta.textContent = 'Nenhum resultado encontrado'; return; }
             if (meta) meta.textContent = `${results.length} resultado(s)`;
+            
+            // Função para normalizar caminhos e evitar duplicações
+            function normalizeUrl(href) {
+                if (!href || href === '#') return href;
+                
+                // 1. Normalizar prefixo
+                let result = href;
+                
+                // 2. Normalizar caminhos duplicados (ex: guide/guide/file.html -> guide/file.html)
+                const urlParts = href.split('#'); // Preserva o fragmento/âncora
+                const pathPart = urlParts[0];
+                const fragmentPart = urlParts.length > 1 ? '#' + urlParts[1] : '';
+                
+                // Divide somente o caminho para deduplicar
+                const queryPartMatch = pathPart.match(/^([^?]*)(\?.*)$/);
+                const queryPart = queryPartMatch ? queryPartMatch[2] : '';
+                const cleanPath = queryPartMatch ? queryPartMatch[1] : pathPart;
+                
+                const parts = cleanPath.split('/').filter(Boolean);
+                const dedupedParts = [];
+                
+                for (let i = 0; i < parts.length; i++) {
+                    if (i < parts.length - 1 && parts[i] === parts[i+1]) {
+                        continue; // Pula duplicações consecutivas
+                    }
+                    dedupedParts.push(parts[i]);
+                }
+                
+                result = '/' + dedupedParts.join('/') + queryPart + fragmentPart;
+                
+                // Verifica se já tem o prefixo para não duplicar
+                if (prefix && prefix !== '/') {
+                    const cleanPrefix = prefix.replace(/^\/|\/$/g, '');
+                    const prefixPattern = new RegExp(`^\\/?${cleanPrefix}\\/`, 'i');
+                    
+                    if (!prefixPattern.test(result)) {
+                        const resultWithoutPrefix = result.replace(/^\/+/, '');
+                        result = prefix + resultWithoutPrefix;
+                    }
+                }
+                
+                return result;
+            }
+            
             results.forEach((r, i) => {
                 const div = document.createElement('div');
                 div.className = 'result';
                 div.style.setProperty('--delay', (i * 0.02) + 's');
-                // Corrigir URL para usar prefixo e normalizar duplicações
+                
+                // Prepara a URL base para a navegação
                 let routeHref = r.route || '#';
                 
-                // Função para normalizar caminhos e evitar duplicações
-                function normalizeUrl(href) {
-                    if (!href || href === '#') return href;
-                    
-                    // 1. Normalizar prefixo
-                    let result = href;
-                    
-                    // 2. Normalizar caminhos duplicados (ex: guide/guide/file.html -> guide/file.html)
-                    const parts = result.split('/').filter(Boolean);
-                    const dedupedParts = [];
-                    
-                    for (let i = 0; i < parts.length; i++) {
-                        if (i < parts.length - 1 && parts[i] === parts[i+1]) {
-                            continue; // Pula duplicações consecutivas
-                        }
-                        dedupedParts.push(parts[i]);
+                // Adiciona fragmento ou query string conforme disponibilidade
+                if (r.headingId) {
+                    // Se temos um ID de cabeçalho específico, adiciona como fragmento
+                    if (!routeHref.includes('#')) {
+                        routeHref = routeHref + '#' + r.headingId;
                     }
-                    
-                    result = '/' + dedupedParts.join('/');
-                    
-                    // Verifica se já tem o prefixo para não duplicar
-                    if (prefix && prefix !== '/') {
-                        const cleanPrefix = prefix.replace(/^\/|\/$/g, '');
-                        const prefixPattern = new RegExp(`^\\/?${cleanPrefix}\\/`, 'i');
-                        
-                        if (!prefixPattern.test(result)) {
-                            result = prefix + result.replace(/^\/+/, '');
-                        }
-                    }
-                    
-                    return result;
+                } else if (r.matchText) {
+                    // Se não temos cabeçalho mas temos texto para buscar, usa query string
+                    const hasQueryChar = routeHref.includes('?');
+                    const queryPrefix = hasQueryChar ? '&' : '?';
+                    routeHref = routeHref + queryPrefix + 'query=' + encodeURIComponent(r.matchText);
                 }
                 
-                routeHref = normalizeUrl(routeHref);
-                div.innerHTML = `<a href="${routeHref}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
+                // Normaliza a URL final para evitar duplicações de caminhos
+                const finalUrl = normalizeUrl(routeHref);
+                
+                // Cria elementos do resultado
+                const a = document.createElement('a');
+                a.href = finalUrl;
+                a.textContent = r.label;
+                
+                const snippet = document.createElement('div');
+                snippet.className = 'snippet';
+                snippet.innerHTML = '… ' + r.snippet + ' …';
+                
+                div.appendChild(a);
+                div.appendChild(snippet);
                 resultsDiv.appendChild(div);
             });
         }
