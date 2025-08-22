@@ -13,8 +13,23 @@
             meta.innerHTML = 'Loading index<span class="dots"></span>';
         }
 
-        const basePath = (location.pathname.endsWith('/') ? location.pathname : location.pathname + '/');
-        const candidates = ['/search_index.json', basePath + 'search_index.json'];
+        // Tenta obter o prefixo a partir da meta tag rhyla-base
+        function getPrefix() {
+            try {
+                const meta = document.querySelector('meta[name="rhyla-base"]');
+                if (meta && meta.getAttribute('content')) {
+                    let base = meta.getAttribute('content');
+                    if (!base.endsWith('/')) base += '/';
+                    return base;
+                }
+            } catch (e) {}
+            
+            // Fallback para método antigo
+            return (location.pathname.endsWith('/') ? location.pathname : location.pathname + '/');
+        }
+        
+        const prefix = getPrefix();
+        const candidates = [prefix + 'search_index.json', '/search_index.json'];
 
         (async () => {
             for (const url of candidates) {
@@ -72,7 +87,12 @@
                 const div = document.createElement('div');
                 div.className = 'result';
                 div.style.setProperty('--delay', (i * 0.02) + 's');
-                div.innerHTML = `<a href="${r.route}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
+                // Corrigir URL para usar prefixo quando necessário
+                let routeHref = r.route || '#';
+                if (routeHref.startsWith('/') && prefix !== '/') {
+                    routeHref = prefix + routeHref.replace(/^\/+/, '');
+                }
+                div.innerHTML = `<a href="${routeHref}">${r.label}</a><div class="snippet">… ${r.snippet} …</div>`;
                 resultsDiv.appendChild(div);
             });
         }

@@ -151,6 +151,30 @@ export default function build() {
 
   const headerInline = withInlineHeaderRuntime(header);
 
+  // Função para reescrever URLs para considerar o basePath
+  function rewriteForBase(html, base) {
+    if (!base || base === '/') return html;
+    
+    // Reescreve URLs absolutas para incluir o basePath
+    // 1. src="/path" → src="/base/path"
+    // 2. href="/path" → href="/base/path"
+    // 3. url(/path) → url(/base/path) (em CSS inline)
+    // Não reescreve URLs externas (http://, https://, //)
+    return html.replace(
+      /\s(src|href)=["'](?!(?:https?:|\/\/))\/([^"']+)["']/gi,
+      function(match, attr, path) {
+        const cleanBase = base.replace(/^\/|\/$/g, '');
+        return ` ${attr}="/${cleanBase}/${path}"`;
+      }
+    ).replace(
+      /(url\s*\(\s*["']?)(?!(?:https?:|\/\/))(\/[^"')]+)(['"]?\s*\))/gi,
+      function(match, pre, path, post) {
+        const cleanBase = base.replace(/^\/|\/$/g, '');
+        return `${pre}/${cleanBase}${path}${post}`;
+      }
+    );
+  }
+
   // Gerar home como index.html (aceita home.md ou home.html)
   const homeMdPath = path.join(bodyPath, 'home.md');
   const homeHtmlPath = path.join(bodyPath, 'home.html');
@@ -159,7 +183,7 @@ export default function build() {
       ? md.render(fs.readFileSync(homeMdPath, 'utf8'))
       : fs.readFileSync(homeHtmlPath, 'utf8');
     const sidebar = generateSidebarHTML(bodyPath, null, 'home');
-    const pageHTML = headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`;
+    const pageHTML = rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`, basePath);
     fs.writeFileSync(path.join(distPath, 'index.html'), pageHTML);
     // Alias home.html na raiz
     fs.writeFileSync(path.join(distPath, 'home.html'), pageHTML);
@@ -171,7 +195,7 @@ export default function build() {
     const sidebar = generateSidebarHTML(bodyPath, null, null);
     fs.writeFileSync(
       path.join(distPath, 'index.html'),
-      headerInline + sidebar + `<main class=\"rhyla-main\">${notFoundHTML}</main>`
+      rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${notFoundHTML}</main>`, basePath)
     );
   }
 
@@ -219,7 +243,7 @@ export default function build() {
       const outDir = path.join(distPath, relPath);
       fs.mkdirSync(outDir, { recursive: true });
 
-      const pageHTML = headerInline + sidebar + `<main class="rhyla-main">${content}</main>`;
+      const pageHTML = rewriteForBase(headerInline + sidebar + `<main class="rhyla-main">${content}</main>`, basePath);
 
       fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
 
@@ -237,7 +261,7 @@ export default function build() {
   const sidebar404 = generateSidebarHTML(bodyPath, null, null);
   fs.writeFileSync(
     path.join(distPath, '404.html'),
-  headerInline + sidebar404 + `<main class="rhyla-main">${notFoundHTML}</main>`
+    rewriteForBase(headerInline + sidebar404 + `<main class="rhyla-main">${notFoundHTML}</main>`, basePath)
   );
 
   console.log('✅ Build completed successfully.');

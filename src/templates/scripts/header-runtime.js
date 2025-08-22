@@ -1,6 +1,28 @@
 (function () {
   // Usa prefixo definido no header (document.write) para suportar subpaths
-  const PREFIX = (typeof window !== 'undefined' && window.__rhyla_prefix__) || '/';
+  function getPrefix() {
+    // Prioridade:
+    // 1. Meta tag rhyla-base (definida no build)
+    // 2. window.__rhyla_prefix__ (definida pelo script inline)
+    // 3. Obtém da config.json (se disponível)
+    // 4. Fallback para '/'
+    try {
+      const meta = document.querySelector('meta[name="rhyla-base"]');
+      if (meta && meta.getAttribute('content')) {
+        let base = meta.getAttribute('content');
+        if (!base.endsWith('/')) base += '/';
+        return base;
+      }
+    } catch (e) {}
+    
+    if (typeof window !== 'undefined' && window.__rhyla_prefix__) {
+      return window.__rhyla_prefix__;
+    }
+    
+    return '/';
+  }
+  
+  const PREFIX = getPrefix();
 
   function onReady(cb){
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', cb);
@@ -84,13 +106,74 @@
     try {
       const sb = document.querySelector('.rhyla-sidebar');
       if (!sb) return;
+      
       // Normaliza: remove query e hash
       let pathOnly = typeof pathname === 'string' && pathname ? pathname : location.pathname;
       try { pathOnly = new URL(pathOnly, location.origin).pathname; } catch(_) { pathOnly = location.pathname; }
+      
+      // Remove duplicações de diretórios no caminho
+      const pathParts = pathOnly.split('/').filter(Boolean);
+      const dedupedParts = [];
+      for (let i = 0; i < pathParts.length; i++) {
+        if (i < pathParts.length - 1 && pathParts[i] === pathParts[i+1]) {
+          continue; // Pula duplicações consecutivas
+        }
+        dedupedParts.push(pathParts[i]);
+      }
+      pathOnly = '/' + dedupedParts.join('/');
+      
+      // Remove o prefixo para comparação
+      if (PREFIX && PREFIX !== '/') {
+        const cleanPrefix = PREFIX.replace(/^\/|\/$/g, '');
+        const prefixRegex = new RegExp(`^\\/?${cleanPrefix}\\/`, 'i');
+        pathOnly = pathOnly.replace(prefixRegex, '');
+        
+        // Se remover o prefixo deixa a string vazia, usamos a raiz
+        if (!pathOnly) pathOnly = '/';
+        if (!pathOnly.startsWith('/')) pathOnly = '/' + pathOnly;
+      }
+      
       // Remove trailing slash (exceto raiz)
       if (pathOnly.length > 1 && pathOnly.endsWith('/')) pathOnly = pathOnly.replace(/\/+$/,'');
+      
       sb.querySelectorAll('li.active').forEach(li => li.classList.remove('active'));
-      const link = sb.querySelector(`a[href='${pathOnly}'], a[href='${pathOnly}.html']`);
+      
+      // Obtém o nome do arquivo/página atual
+      const fileName = pathOnly.split('/').pop();
+      const fileNameWithoutExt = fileName.replace(/\.html$/, '');
+      
+      // Estratégias de busca para encontrar o link correto
+      let link = null;
+      
+      // 1. Tenta com o caminho completo
+      link = sb.querySelector(`a[href='${pathOnly}'], a[href='${pathOnly}.html']`);
+      
+      // 2. Tenta com caminhos relativos simples
+      if (!link) {
+        link = sb.querySelector(`a[href='./${fileNameWithoutExt}.html']`);
+      }
+      
+      // 3. Tenta com data-path (atributo personalizado que adicionamos)
+      if (!link && dedupedParts.length > 1) {
+        const groupPath = dedupedParts.slice(0, -1).join('/');
+        const links = Array.from(sb.querySelectorAll('a[data-path]'));
+        link = links.find(a => {
+          const dataPath = a.getAttribute('data-path');
+          return dataPath === groupPath && 
+                 a.getAttribute('href').endsWith(`${fileNameWithoutExt}.html`);
+        });
+      }
+      
+      // 4. Tenta com qualquer link que termine com o nome do arquivo
+      if (!link) {
+        const allLinks = Array.from(sb.querySelectorAll('a[href]'));
+        link = allLinks.find(a => {
+          const href = a.getAttribute('href');
+          return href.endsWith(`/${fileNameWithoutExt}.html`) || 
+                 href.endsWith(`/${fileNameWithoutExt}`);
+        });
+      }
+      
       if (link) {
         const li = link.closest('li');
         if (li) li.classList.add('active');
@@ -111,19 +194,67 @@
     try {
       const sb = document.querySelector('.rhyla-sidebar');
       if (!sb) return;
+      
       const as = sb.querySelectorAll('a[href]');
       as.forEach(a => {
         const raw = a.getAttribute('href') || '';
         if (!raw || raw.startsWith('#') || /^(https?:)?\/\//i.test(raw) || raw.startsWith('mailto:')) return;
-        let newHref = raw;
-        if (raw.startsWith('/')) {
-          newHref = PREFIX + raw.replace(/^\/+/, '');
-        } else {
-          // relativo → torna relativo à raiz do site (PREFIX)
-          newHref = PREFIX + raw.replace(/^\.?\/?/, '');
+        
+        // Primeiro normaliza o caminho para remover possíveis duplicações
+        let normalizedHref = raw;
+        
+        // Verifica se precisa adicionar prefixo
+        if (PREFIX && PREFIX !== '/') {
+          // Identifica se já tem o prefixo
+          const cleanPrefix = PREFIX.replace(/^\/|\/$/g, '');
+          const prefixPattern = new RegExp(`^(\\.?\\/)?${cleanPrefix}\\/`, 'i');
+          
+          if (!prefixPattern.test(normalizedHref)) {
+            if (normalizedHref.startsWith('/')) {
+              // URLs absolutas são prefixadas com o PREFIX
+              normalizedHref = PREFIX + normalizedHref.replace(/^\/+/, '');
+            } else {
+              // URLs relativas também são prefixadas com PREFIX para garantir consistência
+              normalizedHref = PREFIX + normalizedHref.replace(/^\.?\/?/, '');
+            }
+          }
         }
-        a.setAttribute('href', newHref);
+        
+        // Normaliza para remover possíveis duplicações de diretórios
+        const finalHref = normalizeUrl(normalizedHref);
+        a.setAttribute('href', finalHref);
       });
+      
+      // Também consertar links na busca, se existir
+      const searchResults = document.getElementById('search-results');
+      if (searchResults) {
+        const searchLinks = searchResults.querySelectorAll('a[href]');
+        searchLinks.forEach(a => {
+          const raw = a.getAttribute('href') || '';
+          if (!raw || raw.startsWith('#') || /^(https?:)?\/\//i.test(raw) || raw.startsWith('mailto:')) return;
+          
+          // Aplica normalização para evitar duplicações
+          let normalizedHref = raw;
+          
+          // Verifica se precisa adicionar prefixo
+          if (PREFIX && PREFIX !== '/') {
+            const cleanPrefix = PREFIX.replace(/^\/|\/$/g, '');
+            const prefixPattern = new RegExp(`^(\\.?\\/)?${cleanPrefix}\\/`, 'i');
+            
+            if (!prefixPattern.test(normalizedHref)) {
+              if (normalizedHref.startsWith('/')) {
+                normalizedHref = PREFIX + normalizedHref.replace(/^\/+/, '');
+              } else {
+                normalizedHref = PREFIX + normalizedHref.replace(/^\.?\/?/, '');
+              }
+            }
+          }
+          
+          // Normaliza duplicações de diretórios
+          const finalHref = normalizeUrl(normalizedHref);
+          a.setAttribute('href', finalHref);
+        });
+      }
     } catch(_) { /* noop */ }
   }
 
@@ -144,12 +275,66 @@
     return true;
   }
 
+  // Função para normalizar URLs e evitar duplicação de prefixo e caminhos
+  function normalizeUrl(href) {
+    if (!href) return href;
+    
+    // 1. Normalizar prefixo
+    let result = href;
+    if (PREFIX && PREFIX !== '/') {
+      const cleanPrefix = PREFIX.replace(/^\/|\/$/g, '');
+      const prefixPattern = new RegExp(`^(\\/?)(${cleanPrefix}\\/)+(${cleanPrefix}\\/)`, 'i');
+      result = result.replace(prefixPattern, '$1$2');
+    }
+    
+    // 2. Normalizar caminhos duplicados (ex: guide/guide/file.html -> guide/file.html)
+    const urlObj = new URL(result, location.origin);
+    const pathParts = urlObj.pathname.split('/').filter(Boolean);
+    
+    // Deduplica partes consecutivas idênticas do caminho
+    const dedupedParts = [];
+    for (let i = 0; i < pathParts.length; i++) {
+      if (i < pathParts.length - 1 && pathParts[i] === pathParts[i+1]) {
+        continue; // Pula duplicações consecutivas
+      }
+      dedupedParts.push(pathParts[i]);
+    }
+    
+    // Reconstrói a URL com o caminho normalizado
+    urlObj.pathname = '/' + dedupedParts.join('/');
+    
+    // Se for URL relativa ao site atual, retorna apenas o pathname
+    if (urlObj.origin === location.origin) {
+      return urlObj.pathname + urlObj.search + urlObj.hash;
+    }
+    
+    return urlObj.toString();
+  }
+  
   async function navigate(href, doPush = true) {
     try {
-      const res = await fetch(href, { credentials: 'same-origin' });
+      // Normaliza a URL antes de navegar para evitar duplicações
+      const normalizedHref = normalizeUrl(href);
+      
+      // Verifica se existe duplicação de diretórios no caminho
+      const urlObj = new URL(normalizedHref, location.origin);
+      const pathParts = urlObj.pathname.split('/').filter(Boolean);
+      
+      let hasDuplication = false;
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        if (pathParts[i] === pathParts[i+1]) {
+          hasDuplication = true;
+          break;
+        }
+      }
+      
+      // Se encontrou duplicação, normaliza novamente
+      const finalHref = hasDuplication ? normalizeUrl(normalizedHref) : normalizedHref;
+      
+      const res = await fetch(finalHref, { credentials: 'same-origin' });
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const html = await res.text();
-      if (!swapMainFromHTML(html, href, doPush)) location.assign(href);
+      if (!swapMainFromHTML(html, finalHref, doPush)) location.assign(finalHref);
     } catch (err) { location.assign(href); }
   }
 
@@ -166,8 +351,10 @@
   });
 
   window.addEventListener('popstate', () => {
-  navigate(location.pathname + location.search + location.hash, false);
-  setTimeout(scrollToQueryIfAny, 0);
+    // Quando voltar/avançar no histórico, manter navegação relativa correta
+    const currentPath = location.pathname + location.search + location.hash;
+    navigate(currentPath, false);
+    setTimeout(scrollToQueryIfAny, 0);
   });
 
   // ===== Global Search Overlay =====
@@ -186,8 +373,11 @@
 
   async function ensureIndexLoaded() {
     if (searchIndex.length) return;
-  const basePath = location.pathname.endsWith('/') ? location.pathname : (location.pathname.replace(/[^\/]*$/, ''));
-  const candidates = [PREFIX + 'search_index.json', basePath + 'search_index.json'];
+    // Tenta obter o índice de busca usando caminho correto considerando PREFIX
+    // 1. Obtém direto do PREFIX (configuração central)
+    // 2. Tenta obter a partir do caminho atual (compatibilidade com versões antigas)
+    const basePath = location.pathname.endsWith('/') ? location.pathname : (location.pathname.replace(/[^\/]*$/, ''));
+    const candidates = [PREFIX + 'search_index.json', basePath + 'search_index.json'];
     for (const url of candidates) {
       try {
         const res = await fetch(url);
@@ -358,6 +548,7 @@
     if (!nodes || !nodes.length) return '<div class="rh-toc-empty">No topics</div>';
     let html = '<ul class="rh-toc">';
     for (const n of nodes) {
+      // Anchors (#) são relativos ao documento atual, então não precisa ajustar com PREFIX
       html += `<li><a href="#${n.id}">${n.text}</a>`;
       if (n.children && n.children.length) html += renderToc(n.children);
       html += '</li>';

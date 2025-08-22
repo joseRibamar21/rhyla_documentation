@@ -6,19 +6,30 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Documentação</title>
   <!-- CSS global que controla layout -->
-  <link rel="stylesheet" href="/styles/global.css">
+  <link rel="stylesheet" href="./styles/global.css">
   <!-- Tema (anti-flicker): aplica o tema salvo antes do primeiro paint -->
   <script>
     (function () {
       try {
+        // Determinar o prefixo base a partir da meta tag ou calcular
+        var getPrefix = function() {
+          var metaBase = document.querySelector('meta[name="rhyla-base"]');
+          if (metaBase && metaBase.getAttribute('content')) {
+            var base = metaBase.getAttribute('content');
+            return base.endsWith('/') ? base : base + '/';
+          }
+          return './';
+        };
+        
+        var prefix = getPrefix();
         var saved = localStorage.getItem('rhyla-theme') || 'light';
         var link = document.createElement('link');
         link.id = 'theme-style';
         link.rel = 'stylesheet';
-        link.href = '/styles/' + (saved === 'dark' ? 'dark' : 'light') + '.css';
+        link.href = prefix + 'styles/' + (saved === 'dark' ? 'dark' : 'light') + '.css';
         document.write(link.outerHTML);
       } catch (e) {
-        document.write('<link id="theme-style" rel="stylesheet" href="/styles/light.css">');
+        document.write('<link id="theme-style" rel="stylesheet" href="./styles/light.css">');
       }
     })();
   </script>
@@ -27,7 +38,22 @@
 <body>
   <header class="rhyla-header">
     <div class="rhyla-brand">
-      <img id="rhyla-logo" src="/public/logo.png" alt="Logo da Documentação" style="height:100px;width:auto;">
+      <!-- Logo com caminho relativo baseado no PREFIX -->
+      <img id="rhyla-logo" src="./public/logo.png" alt="Logo da Documentação" style="height:100px;width:auto;" onload="this.src=this.getAttribute('data-src')||this.src" data-src="">
+      <script>
+        (function() {
+          try {
+            var logo = document.getElementById('rhyla-logo');
+            var metaBase = document.querySelector('meta[name="rhyla-base"]');
+            var prefix = './';
+            if (metaBase && metaBase.getAttribute('content')) {
+              prefix = metaBase.getAttribute('content');
+              if (!prefix.endsWith('/')) prefix += '/';
+            }
+            logo.setAttribute('data-src', prefix + 'public/logo.png');
+          } catch(e) {}
+        })();
+      </script>
     </div>
     <div class="rhyla-actions">
       <button id="search-open" class="theme-switch" aria-label="Abrir busca">🔎 Search</button>
@@ -52,4 +78,4 @@
     </div>
   </div>
 
-  <script src="/scripts/header-runtime.js"></script>
+  <script src="./scripts/header-runtime.js"></script>

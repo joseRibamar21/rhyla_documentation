@@ -29,8 +29,8 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
 
   let html = `<aside class="rhyla-sidebar"><ul>`;
 
-  // 🏠 Home
-  html += `<li class="item-sidebar ${activeTopic === 'home' ? 'active' : ''}"><a href="/">🏠 Home</a></li>`;
+  // 🏠 Home - usando caminho relativo para evitar duplicação de prefixo
+  html += `<li class="item-sidebar ${activeTopic === 'home' ? 'active' : ''}"><a href="./">🏠 Home</a></li>`;
 
   // Páginas raiz (exceto Search e Home)
   for (const topic of rootTopics.sort()) {
@@ -43,7 +43,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
     }
     const prefix = method ? tagHTML(method, label) : '| ' + topic;
-    html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="${topic}.html">${prefix}</a></li>`;
+    html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="./${topic}.html">${prefix}</a></li>`;
   }
 
   // Render recursivo de diretórios
@@ -52,6 +52,22 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     const entries = fs.readdirSync(dirAbs);
     const files = entries.filter(name => isFileTopic(name) && !isHiddenSpecial(name)).sort();
     const dirs = entries.filter(name => isDir(path.join(dirAbs, name))).sort();
+
+    // Função auxiliar para normalizar caminhos e evitar duplicações
+    function normalizePath(inputPath) {
+      // Remove duplicações de diretório (ex: guide/guide/file.html -> guide/file.html)
+      const parts = inputPath.split('/').filter(Boolean);
+      const result = [];
+      
+      for (let i = 0; i < parts.length; i++) {
+        if (i < parts.length - 1 && parts[i] === parts[i+1]) {
+          continue; // Pula duplicações consecutivas
+        }
+        result.push(parts[i]);
+      }
+      
+      return result.join('/');
+    }
 
     // Arquivos primeiro (exceto na raiz, que já é renderizada acima)
     if (relUrl) {
@@ -67,15 +83,17 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
           label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
         }
         const prefix = method ? tagHTML(method, label) : '| ' + topic;
-      const href = `${relUrl ? relUrl + '/' : ''}${topic}.html`;
-        html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="${href}">${prefix}</a></li>`;
+      // Construímos caminhos relativos corretos para os tópicos dentro de diretórios
+      const normalizedPath = normalizePath(relUrl);
+      const href = `./${normalizedPath}/${topic}.html`;
+        html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="${href}" data-path="${normalizedPath}">${prefix}</a></li>`;
       }
     }
 
     // Subdiretórios
     for (const d of dirs) {
       const dirPath = path.join(dirAbs, d);
-      const childRel = relUrl ? `${relUrl}/${d}` : d;
+      const childRel = relUrl ? normalizePath(`${relUrl}/${d}`) : d;
       const ag = activeGroup || '';
       const isOpen = ag === childRel || ag.startsWith(childRel + '/'); // abre ancestrais
       const padHeader = depth * INDENT; // pasta atual
