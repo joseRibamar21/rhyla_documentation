@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 export default function dev() {
   const app = express();
   const md = new markdownIt();
-  const rhylaPath = path.join(process.cwd(), "rhyla");
+  const rhylaPath = path.join(process.cwd(), "rhyla-docs"); // Alterado para rhyla-docs para evitar conflito
 
   // Scripts agora ficam em src/templates/scripts
   const scriptsFolderPath = path.join(__dirname, "../templates/scripts");
@@ -76,8 +76,66 @@ export default function dev() {
     res.status(404).send('{}');
   });
 
-  // Ler header (já prefix-aware e com carregamento de runtime via document.write no client)
-  const header = fs.readFileSync(path.join(rhylaPath, "header.html"), "utf8");
+  // Ler header 
+  let header = fs.readFileSync(path.join(rhylaPath, "header.html"), "utf8");
+  
+  // Certificar-se de que todos os caminhos sejam absolutos
+  // Isso evita quebras quando usuário atualiza uma página em subdiretório
+  header = header.replace(/href=["']\.\/styles\//g, 'href="/styles/"');
+  header = header.replace(/src=["']\.\/public\//g, 'src="/public/"');
+  header = header.replace(/src=["']\.\/scripts\//g, 'src="/scripts/"');
+
+  // Adicionar script para correção de caminhos CSS
+  const cssFixScript = `
+<script>
+(function(){
+  // Função que corrige caminhos CSS em todas as páginas
+  function fixCssUrls() {
+    try {
+      // Definir prefixo global
+      window.__rhyla_prefix__ = '/';
+      
+      // Corrigir links CSS
+      var links = document.querySelectorAll('link[rel="stylesheet"]');
+      for (var i = 0; i < links.length; i++) {
+        var href = links[i].getAttribute('href');
+        if (href && !href.startsWith('/')) {
+          links[i].href = '/' + href;
+        } else if (href && href.indexOf('styles/') > -1 && !href.startsWith('/styles/')) {
+          links[i].href = '/styles/' + href.split('styles/')[1];
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao corrigir caminhos CSS:', e);
+    }
+  }
+  
+  // Executar imediatamente
+  fixCssUrls();
+  
+  // Também executar após carregamento
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fixCssUrls);
+  } else {
+    setTimeout(fixCssUrls, 0);
+  }
+})();
+</script>`;
+  
+  // Adicionar o script antes de fechar o head
+  if (/<\/head>/i.test(header)) {
+    header = header.replace(/<\/head>/i, `${cssFixScript}\n</head>`);
+  }
+                
+  // Garantir que a meta tag rhyla-base esteja presente
+  if (!/meta\s+name=["']rhyla-base["']/i.test(header)) {
+    const metaTag = `\n  <meta name="rhyla-base" content="/">\n`;
+    if (/<meta[^>]+name=["']viewport["'][^>]*>/i.test(header)) {
+      header = header.replace(/(<meta[^>]+name=["']viewport["'][^>]*>)/i, `$1${metaTag}`);
+    } else if (/<head[^>]*>/i.test(header)) {
+      header = header.replace(/<head[^>]*>/i, (m) => m + metaTag);
+    }
+  }
 
   // Home
   app.get("/", (req, res) => {

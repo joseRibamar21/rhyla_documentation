@@ -46,7 +46,7 @@ function createHiddenFile(filePath) {
 
 export default function init() {
   const root = process.cwd();
-  const rhylaPath = path.join(root, 'rhyla');
+  const rhylaPath = path.join(root, 'rhyla-docs'); // Alterado para rhyla-docs para evitar conflito
   const templatesPath = path.join(__dirname, '../templates');
 
   if (!fs.existsSync(templatesPath)) {
@@ -74,6 +74,9 @@ export default function init() {
   
   // Copiar estilos
   fs.cpSync(path.join(templatesPath, 'styles'), path.join(rhylaPath, 'styles'), { recursive: true });
+
+  // copiar clients
+  fs.cpSync(path.join(templatesPath, 'clients'),path.join(rhylaPath, 'body', 'clients'), { recursive: true });
 
   fs.cpSync(path.join(templatesPath, 'guide'), path.join(rhylaPath, 'body', 'guide'), { recursive: true });
 

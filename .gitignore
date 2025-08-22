@@ -3,6 +3,7 @@ rhyla
 dist
 build
 .env
+rhyla-docs
 
 src/templates/scripts/search_index.js
 src/templates/scripts/search_index.json

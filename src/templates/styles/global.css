@@ -98,6 +98,20 @@ body.has-right-toc .rhyla-main{
   }
 }
 
+/* Animação de destaque para resultados de busca e navegação por âncoras */
+@keyframes highlight-pulse {
+  0% { background-color: rgba(0, 102, 255, 0.2); }
+  50% { background-color: rgba(0, 102, 255, 0.1); }
+  100% { background-color: transparent; }
+}
+
+/* Usar a animação nova em vez da animação rhFlash */
+.rh-scroll-highlight {
+  animation: highlight-pulse 2.3s ease-in-out;
+  border-radius: 3px;
+  outline: 2px solid rgba(0, 102, 255, 0.1);
+}
+
 .rh-toc-header{ font-weight: 700; color: var(--rh-muted); margin-bottom: 8px; }
 .rh-toc{ list-style: none; padding-left: 0; margin: 0; font-size: 14px; }
 .rh-toc ul{ list-style: none; padding-left: 12px; margin: 6px 0 0 0; }
@@ -284,12 +298,3 @@ table {
 .rh-search-results a { font-weight: 600; text-decoration: none; color: inherit; }
 .rh-search-results .snippet { font-size: 14px; color: var(--rh-muted); margin-top: 6px; line-height: 1.5; }
 .rh-search-results mark { background: var(--rh-active-bg); color: inherit; padding: 0 2px; border-radius: 4px; box-shadow: inset 0 -1px 0 var(--rh-accent); }
-
-/* Destaque temporário ao rolar por query */
-.rh-scroll-highlight {
-  animation: rhFlash 1.2s ease-in-out 1;
-}
-@keyframes rhFlash {
-  0% { background-color: rgba(255, 230, 0, 0.35); }
-  100% { background-color: transparent; }
-}
