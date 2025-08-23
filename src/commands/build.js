@@ -8,11 +8,14 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+
+
 export default function build() {
+
+  
   const root = process.cwd();
-  const rhylaPath = path.join(root, 'rhyla');
+  const rhylaPath = path.join(root, 'rhyla-docs'); // Alterado para rhyla-docs para evitar conflito
   const distPath = path.join(root, 'dist');
-  // Corrige para src/templates (relativo a src/commands)
   const templatesPath = path.join(__dirname, '../templates');
 
   if (!fs.existsSync(rhylaPath)) {
@@ -96,6 +99,20 @@ export default function build() {
 
   // Ler header/footer e notFound da pasta rhyla/body
   let header = fs.readFileSync(path.join(rhylaPath, 'header.html'), 'utf8');
+  
+  // Garantir que todos os caminhos de recursos usem o basePath correto
+  header = header.replace(/href=["']\.\/styles\//g, `href="${basePath}styles/`)
+              .replace(/src=["']\.\/public\//g, `src="${basePath}public/`)
+              .replace(/href=["']\/styles\//g, `href="${basePath}styles/`)
+              .replace(/src=["']\/public\//g, `src="${basePath}public/`)
+              .replace(/src=["']\.\/scripts\//g, `src="${basePath}scripts/`)
+              .replace(/src=["']\/scripts\//g, `src="${basePath}scripts/`);
+  
+  // Garantir que os links CSS tenham IDs para que possam ser manipulados via script
+  if (!/id=["']theme-style["']/i.test(header)) {
+    header = header.replace(/(<link[^>]*href=["'][^"']*\/light\.css["'][^>]*)/i, '$1 id="theme-style"');
+  }
+  
   // Injeta meta com base configurada (usado pelo prefix writer do header)
   if (!/meta\s+name=["']rhyla-base["']/i.test(header)) {
     const metaTag = `\n  <meta name="rhyla-base" content="${basePath}">\n`;
@@ -114,42 +131,142 @@ export default function build() {
 
   function withInlineHeaderRuntime(html) {
     try {
-      // Se o header já é prefix-aware, não faça nada
-      if (html.includes('__rhyla_prefix__')) {
-        // Mesmo prefix-aware, vamos ainda inlinear o runtime se houver referência externa
-        const runtimePath = path.join(templatesPath, 'scripts', 'header-runtime.js');
-        if (!fs.existsSync(runtimePath)) return html;
-        const runtimeRaw = fs.readFileSync(runtimePath, 'utf8');
-        const runtime = runtimeRaw.replace(/<\/script>/gi, '<\\/script>');
-        return html.replace(
-          /<script\s+src=["'](?:\/?|[^"']*)scripts\/header-runtime\.js["']><\/script>/i,
-          () => `<script>\n${runtime}\n<\/script>`
-        );
+      // Criar script que resolve problemas de CSS em todas as páginas
+      const cssFixScript = `
+<script>
+(function(){
+  // Importante: executar antes de qualquer renderização para evitar FOUC
+  function fixCssPathsImmediately() {
+    try {
+      // 1. Determinar o prefixo base correto
+      var base = "${basePath}";
+      if (typeof window !== 'undefined') {
+        // Para URLs limpas e navegação em subdiretórios
+        var pathname = window.location.pathname;
+        var depth = 0;
+        
+        // Se não estamos na home, calculamos a profundidade para ajustar caminhos relativos
+        if (pathname && pathname !== '/' && !pathname.endsWith('index.html')) {
+          depth = pathname.split('/').filter(Boolean).length;
+        }
+
+        // Armazenar prefixo para outros scripts
+        window.__rhyla_prefix__ = base;
       }
 
-      // Caso legado: remover blocos antigos e injetar writer + inline do runtime
-      const prefixWriter = `\n<script>(function(){try{var base=location.pathname.replace(/index\\.html$/, '');if(!base||base==='\/')base='\/';var prefix=base.endsWith('/')?base:base+'\/';window.__rhyla_prefix__=prefix;var saved=localStorage.getItem('rhyla-theme')||'light';document.write('<link rel=\"stylesheet\" href=\"'+prefix+'styles/global.css\">');document.write('<link id=\"theme-style\" rel=\"stylesheet\" href=\"'+prefix+'styles/'+(saved==='dark'?'dark':'light')+'.css\">');}catch(e){document.write('<link rel=\"stylesheet\" href=\"/styles/global.css\">');document.write('<link id=\"theme-style\" rel=\"stylesheet\" href=\"/styles/light.css\">');}})();<\/script>\n`;
+      // 2. Consertar todos os links CSS imediatamente
+      var links = document.querySelectorAll('link[rel="stylesheet"]');
+      for (var i = 0; i < links.length; i++) {
+        var href = links[i].getAttribute('href');
+        // Substituir links relativos ou absolutos incompletos pelo prefixo correto
+        if (href) {
+          // Primeiro, remover qualquer prefixo atual
+          href = href.replace(/^\\/+/, '').replace(/^styles\\//, 'styles/');
+          
+          // Depois, verificar se é um caminho para CSS
+          if (href.indexOf('styles/') === 0 || href.endsWith('.css')) {
+            // Garantir que comece com /styles/ se for um CSS em styles/
+            if (href.indexOf('styles/') === 0) {
+              links[i].href = base + href;
+            } else {
+              // Outros CSS também recebem caminho absoluto
+              links[i].href = base + href;
+            }
+          }
+        }
+      }
+      
+      // 3. Garantir que o tema seja preservado
+      var savedTheme = localStorage.getItem('rhyla-theme') || 'light';
+      var themeLink = document.getElementById('theme-style');
+      if (themeLink) {
+        themeLink.href = base + 'styles/' + savedTheme + '.css';
+      }
+    } catch (e) {
+      console.error('Erro ao ajustar caminhos CSS:', e);
+    }
+  }
+  
+  // Executar imediatamente para evitar flash de conteúdo sem estilo
+  fixCssPathsImmediately();
+  
+  // Estabelecer variáveis globais para outros scripts
+  window.__rhyla_prefix__ = "${basePath}";
+  
+  // Também executar após carregamento para garantir que tudo esteja correto
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', fixCssPathsImmediately);
+  } else {
+    setTimeout(fixCssPathsImmediately, 0);
+  }
+})();
+</script>`;
 
-      let out = html
-        .replace(/\n?\s*<link[^>]+href=["']\/?styles\/global\.css["'][^>]*>\s*/i, '\n')
-        .replace(/\n?\s*<!--\s*Tema[\s\S]*?<script>[\s\S]*?<\/script>\s*/i, '\n')
-        .replace(/<\/head>/i, prefixWriter + '</head>');
-
-      const runtimePath = path.join(templatesPath, 'scripts', 'header-runtime.js');
-      if (!fs.existsSync(runtimePath)) return out;
-      const runtimeRaw = fs.readFileSync(runtimePath, 'utf8');
-      const runtime = runtimeRaw.replace(/<\/script>/gi, '<\\/script>');
-      out = out.replace(
-        /<script\s+src=["'](?:\/?|[^"']*)scripts\/header-runtime\.js["']><\/script>/i,
-        () => `<script>\n${runtime}\n<\/script>`
-      );
-      return out;
+      // Verificar e incorporar o runtime
+      let processedHtml = html;
+      
+      // Caminho para os scripts runtime
+      const headerRuntimePath = path.join(templatesPath, 'scripts', 'header-runtime.js');
+      const searchRuntimePath = path.join(templatesPath, 'scripts', 'search-runtime.js');
+      
+      // Incorporar header-runtime.js se existir
+      if (fs.existsSync(headerRuntimePath)) {
+        const headerRuntimeContent = fs.readFileSync(headerRuntimePath, 'utf8')
+                                      .replace(/<\/script>/gi, '<\\/script>');
+        
+        // Substituir referência externa pelo código inline
+        processedHtml = processedHtml.replace(
+          /<script[^>]*src=["'](?:\/?|[^"']*)scripts\/header-runtime\.js["'][^>]*><\/script>/i, 
+          `<script>\n${headerRuntimeContent}\n</script>`
+        );
+      }
+      
+      // Incorporar search-runtime.js se existir
+      if (fs.existsSync(searchRuntimePath)) {
+        const searchRuntimeContent = fs.readFileSync(searchRuntimePath, 'utf8')
+                                      .replace(/<\/script>/gi, '<\\/script>');
+        
+        // Substituir referência externa pelo código inline
+        processedHtml = processedHtml.replace(
+          /<script[^>]*src=["'](?:\/?|[^"']*)scripts\/search-runtime\.js["'][^>]*><\/script>/i, 
+          `<script>\n${searchRuntimeContent}\n</script>`
+        );
+      }
+      
+      // Adicionar o script de correção de CSS antes do fechamento do head
+      processedHtml = processedHtml.replace(/<\/head>/i, `${cssFixScript}\n</head>`);
+      
+      return processedHtml;
     } catch {
       return html;
     }
   }
 
   const headerInline = withInlineHeaderRuntime(header);
+
+  // Função para reescrever URLs para considerar o basePath
+  function rewriteForBase(html, base) {
+    if (!base || base === '/') return html;
+    
+    // Reescreve URLs absolutas para incluir o basePath
+    // 1. src="/path" → src="/base/path"
+    // 2. href="/path" → href="/base/path"
+    // 3. url(/path) → url(/base/path) (em CSS inline)
+    // Não reescreve URLs externas (http://, https://, //)
+    return html.replace(
+      /\s(src|href)=["'](?!(?:https?:|\/\/))\/([^"']+)["']/gi,
+      function(match, attr, path) {
+        const cleanBase = base.replace(/^\/|\/$/g, '');
+        return ` ${attr}="/${cleanBase}/${path}"`;
+      }
+    ).replace(
+      /(url\s*\(\s*["']?)(?!(?:https?:|\/\/))(\/[^"')]+)(['"]?\s*\))/gi,
+      function(match, pre, path, post) {
+        const cleanBase = base.replace(/^\/|\/$/g, '');
+        return `${pre}/${cleanBase}${path}${post}`;
+      }
+    );
+  }
 
   // Gerar home como index.html (aceita home.md ou home.html)
   const homeMdPath = path.join(bodyPath, 'home.md');
@@ -159,7 +276,7 @@ export default function build() {
       ? md.render(fs.readFileSync(homeMdPath, 'utf8'))
       : fs.readFileSync(homeHtmlPath, 'utf8');
     const sidebar = generateSidebarHTML(bodyPath, null, 'home');
-    const pageHTML = headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`;
+    const pageHTML = rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`, basePath);
     fs.writeFileSync(path.join(distPath, 'index.html'), pageHTML);
     // Alias home.html na raiz
     fs.writeFileSync(path.join(distPath, 'home.html'), pageHTML);
@@ -171,7 +288,7 @@ export default function build() {
     const sidebar = generateSidebarHTML(bodyPath, null, null);
     fs.writeFileSync(
       path.join(distPath, 'index.html'),
-      headerInline + sidebar + `<main class=\"rhyla-main\">${notFoundHTML}</main>`
+      rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${notFoundHTML}</main>`, basePath)
     );
   }
 
@@ -219,7 +336,7 @@ export default function build() {
       const outDir = path.join(distPath, relPath);
       fs.mkdirSync(outDir, { recursive: true });
 
-      const pageHTML = headerInline + sidebar + `<main class="rhyla-main">${content}</main>`;
+      const pageHTML = rewriteForBase(headerInline + sidebar + `<main class="rhyla-main">${content}</main>`, basePath);
 
       fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
 
@@ -237,7 +354,7 @@ export default function build() {
   const sidebar404 = generateSidebarHTML(bodyPath, null, null);
   fs.writeFileSync(
     path.join(distPath, '404.html'),
-  headerInline + sidebar404 + `<main class="rhyla-main">${notFoundHTML}</main>`
+    rewriteForBase(headerInline + sidebar404 + `<main class="rhyla-main">${notFoundHTML}</main>`, basePath)
   );
 
   console.log('✅ Build completed successfully.');

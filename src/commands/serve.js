@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 export default async function serve(opts = {}) {
   const root = process.cwd();
-  const rhylaPath = path.join(root, 'rhyla');
+  const rhylaPath = path.join(root, 'rhyla-docs'); // Alterado para rhyla-docs para evitar conflito
   const distDir = path.join(root, opts.dir || 'dist');
 
   // Base path: --base CLI > rhyla/config.json base > '/'

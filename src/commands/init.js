@@ -46,7 +46,7 @@ function createHiddenFile(filePath) {
 
 export default function init() {
   const root = process.cwd();
-  const rhylaPath = path.join(root, 'rhyla');
+  const rhylaPath = path.join(root, 'rhyla-docs'); // Alterado para rhyla-docs para evitar conflito
   const templatesPath = path.join(__dirname, '../templates');
 
   if (!fs.existsSync(templatesPath)) {
@@ -62,7 +62,7 @@ export default function init() {
 
   // Copiar header e footer
   fs.copyFileSync(path.join(templatesPath, 'header.html'), path.join(rhylaPath, 'header.html'));
-  
+
   // Copiar home.md
   fs.copyFileSync(path.join(templatesPath, 'home.md'), path.join(rhylaPath, 'body', 'home.md'));
 
@@ -71,11 +71,18 @@ export default function init() {
 
   // Copiar config.json
   fs.copyFileSync(path.join(templatesPath, 'config.json'), path.join(rhylaPath, 'config.json'));
-  
+
   // Copiar estilos
   fs.cpSync(path.join(templatesPath, 'styles'), path.join(rhylaPath, 'styles'), { recursive: true });
 
+  // copiar clients
+  fs.cpSync(path.join(templatesPath, 'clients'), path.join(rhylaPath, 'body', 'clients'), { recursive: true });
+
   fs.cpSync(path.join(templatesPath, 'guide'), path.join(rhylaPath, 'body', 'guide'), { recursive: true });
+
+
+  fs.copyFileSync(path.join(templatesPath, 'tag-new.html'), path.join(rhylaPath, 'body', 'tag-new.html'));
+
 
   // Copiar public (inclui logo.png se existir)
   const publicTpl = path.join(templatesPath, 'public');
