@@ -3,5 +3,8 @@
   "description": "Generated with Rhyla",
   "side_topics": true,
   "allow_raw_html": false,
-  "base": "/"
+  "base": "/",
+  "build_ignore": [
+    "kit_dev_rhyla"
+  ]
 }

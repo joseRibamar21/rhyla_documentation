@@ -1,18 +1,60 @@
 import fs from 'fs';
 import path from 'path';
 
-export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = null) {
+export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = null, options = {}) {
   const INDENT = 20; // px por nível de profundidade
   const isFileTopic = (name) => /\.(md|html)$/i.test(name);
   const isHiddenSpecial = (name) => ['home.md','home.html','notfound.md','notfound.html'].includes(name.toLowerCase());
   const isDir = (full) => fs.existsSync(full) && fs.statSync(full).isDirectory();
 
-  const rootTopics = fs.readdirSync(bodyPath)
+  // Suporte a padrões de ignore vindos do build (relativos a body/)
+  const inputIgnore = Array.isArray(options.ignore) ? options.ignore.slice() : [];
+  const ignorePatterns = inputIgnore
+    .map((p) => String(p).replace(/^\/+|\/+$/g, ''))
+    .filter(Boolean)
+    .map((p) => p.toLowerCase());
+
+  function patternToRegex(pat) {
+    const escaped = pat
+      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*/g, '.*');
+    return new RegExp('^' + escaped + '$', 'i');
+  }
+
+  const ignoreRegexes = ignorePatterns
+    .filter((p) => p.includes('*') || p.includes('/'))
+    .map((p) => patternToRegex(p));
+
+  const ignoreNames = new Set(
+    ignorePatterns.filter((p) => !p.includes('/') && !p.includes('*'))
+  );
+
+  function shouldIgnorePath(relPosix) {
+    if (!relPosix) return false;
+    const relLower = relPosix.toLowerCase();
+    const baseName = relLower.split('/').pop();
+    if (ignoreNames.has(baseName)) return true;
+    // diretório/prefixo sem '*'
+    for (const pat of ignorePatterns) {
+      if (!pat.includes('*')) {
+        const dirPat = pat.replace(/\/$/, '');
+        if (relLower === dirPat || relLower.startsWith(dirPat + '/')) return true;
+      }
+    }
+    for (const rx of ignoreRegexes) {
+      if (rx.test(relLower)) return true;
+    }
+    return false;
+  }
+
+  const rootEntries = fs.readdirSync(bodyPath);
+  const rootTopics = rootEntries
     .filter(name => {
       const full = path.join(bodyPath, name);
       return fs.statSync(full).isFile() && isFileTopic(name);
     })
     .filter(name => !isHiddenSpecial(name))
+    .filter(name => !shouldIgnorePath(name))
     .map(f => path.basename(f, path.extname(f)));
 
   const methodOf = (topic) => {
@@ -133,8 +175,11 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     }
 
     // Arquivos primeiro (exceto na raiz, que já é renderizada acima)
-    if (relUrl) {
+  if (relUrl) {
       for (const file of files) {
+    // ignorar por padrão conforme padrões
+    const relForIgnore = relUrl ? `${relUrl}/${file}` : file;
+    if (shouldIgnorePath(relForIgnore)) continue;
         const topic = path.basename(file, path.extname(file));
         const relForCompare = relUrl || '';
         const ag = activeGroup || '';
@@ -168,6 +213,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     for (const d of dirs) {
       const dirPath = path.join(dirAbs, d);
       const childRel = relUrl ? normalizePath(`${relUrl}/${d}`) : d;
+      if (shouldIgnorePath(childRel)) continue;
       const ag = activeGroup || '';
       const isOpen = ag === childRel || ag.startsWith(childRel + '/'); // abre ancestrais
       const padHeader = depth * INDENT; // pasta atual

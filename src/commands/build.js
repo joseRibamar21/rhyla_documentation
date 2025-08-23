@@ -72,12 +72,19 @@ export default function build() {
   const cfgSrc = path.join(rhylaPath, 'config.json');
   const cfgDst = path.join(distPath, 'config.json');
   let basePath = '/';
+  // Lista de ignorados configurável
+  /** @type {string[]} */
+  let buildIgnore = [];
   if (fs.existsSync(cfgSrc)) {
     fs.copyFileSync(cfgSrc, cfgDst);
     try {
       const cfgObj = JSON.parse(fs.readFileSync(cfgSrc, 'utf8'));
       if (cfgObj && typeof cfgObj.base === 'string' && cfgObj.base.trim()) {
         basePath = cfgObj.base.trim();
+      }
+      // Lê lista de arquivos/pastas a ignorar durante o build
+      if (cfgObj && Array.isArray(cfgObj.build_ignore)) {
+        buildIgnore = cfgObj.build_ignore.filter((s) => typeof s === 'string');
       }
     } catch (_) { /* ignore parse errors */ }
   }
@@ -128,6 +135,71 @@ export default function build() {
     : '<h1>404</h1>';
 
   const bodyPath = path.join(rhylaPath, 'body');
+
+  // Excluídos fixos e padrões configuráveis de ignore (antes do primeiro uso)
+  const EXCLUDE = new Set([
+    'notfound.html', 'notfound.md', 'notfound.htm', 'notfound',
+    'search.html', '.search.html', 'search.md', '.search.md', 
+    // Arquivos a serem excluídos independentemente da pasta
+    'page-generator.css', 'generatePages.js', 'generatepages.js',
+    'header-runtime.js', 'search-runtime.js', 'search_runtime.js',
+    'search_index.js', 'search_index.json', 'generateSearchIndex.js',
+  ]);
+
+  // Normaliza padrões de ignore vindos do config e adiciona defaults
+  const defaultIgnore = ['kit_dev_rhyla'];
+  const ignorePatterns = [...new Set([...defaultIgnore, ...buildIgnore])]
+    .map((p) => p.replace(/^\/+|\/+$/g, '')) // remove barras extras
+    .filter(Boolean)
+    .map((p) => p.toLowerCase());
+
+  function toPosix(relPath) {
+    return relPath ? relPath.split(path.sep).join('/') : '';
+  }
+
+  // Transforma um padrão tipo 'a/b/*.md' em regex
+  function patternToRegex(pat) {
+    const escaped = pat
+      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*/g, '.*');
+    return new RegExp('^' + escaped + '$', 'i');
+  }
+
+  const ignoreRegexes = ignorePatterns
+    .filter((p) => p.includes('*') || p.includes('/'))
+    .map((p) => patternToRegex(p.endsWith('/*') ? p : p));
+
+  const ignoreNames = new Set(
+    ignorePatterns.filter((p) => !p.includes('/') && !p.includes('*'))
+  );
+
+  function shouldIgnore(itemName, itemRelPosix) {
+    const nameLower = itemName.toLowerCase();
+    const relLower = (itemRelPosix || '').toLowerCase();
+
+    if (ignoreNames.has(nameLower)) return true;
+    if (EXCLUDE.has(nameLower)) return true; // mantêm exclusões internas
+
+    if (relLower) {
+      // 1) Diretórios listados sem '*' devem ignorar tudo que esteja dentro
+      for (const pat of ignorePatterns) {
+        if (!pat.includes('*')) {
+          const dirPat = pat.replace(/\/$/, '');
+          if (relLower === dirPat || relLower.startsWith(dirPat + '/')) {
+            return true;
+          }
+        }
+      }
+
+      // 2) Padrões com '*' ou caminhos específicos
+      for (const rx of ignoreRegexes) {
+        if (rx.test(relLower)) return true;
+        // Se o padrão representa um diretório (termina com /*), já está coberto pelo regex acima
+        // Para padrões de diretório sem '/*', ignorar tudo que comece com "dir/"
+      }
+    }
+    return false;
+  }
 
   function withInlineHeaderRuntime(html) {
     try {
@@ -275,7 +347,7 @@ export default function build() {
     const content = fs.existsSync(homeMdPath)
       ? md.render(fs.readFileSync(homeMdPath, 'utf8'))
       : fs.readFileSync(homeHtmlPath, 'utf8');
-    const sidebar = generateSidebarHTML(bodyPath, null, 'home');
+  const sidebar = generateSidebarHTML(bodyPath, null, 'home', { ignore: ignorePatterns });
     const pageHTML = rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`, basePath);
     fs.writeFileSync(path.join(distPath, 'index.html'), pageHTML);
     // Alias home.html na raiz
@@ -285,17 +357,13 @@ export default function build() {
     fs.mkdirSync(homeDir, { recursive: true });
     fs.writeFileSync(path.join(homeDir, 'index.html'), pageHTML);
   } else {
-    const sidebar = generateSidebarHTML(bodyPath, null, null);
+  const sidebar = generateSidebarHTML(bodyPath, null, null, { ignore: ignorePatterns });
     fs.writeFileSync(
       path.join(distPath, 'index.html'),
       rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${notFoundHTML}</main>`, basePath)
     );
   }
 
-  const EXCLUDE = new Set([
-    'notfound.html', 'notfound.md', 'notfound.htm', 'notfound',
-    'search.html', '.search.html', 'search.md', '.search.md', 'page-generator.css'
-  ]);
 
   // Função recursiva para gerar páginas a partir de rhyla/body (sem página de busca)
   function processDir(dir, relPath = '') {
@@ -304,19 +372,25 @@ export default function build() {
     for (const item of items) {
       const itemPath = path.join(dir, item.name);
       const itemRel = path.join(relPath, item.name);
+      const itemRelPosix = toPosix(itemRel);
+
+      console.log('itemPath:', itemPath);
 
       if (item.isDirectory()) {
-        // Skip development-only folder
-        if (item.name.toLowerCase() === 'kit_dev_rhyla') {
+        // Respeita a lista de ignorados (nomes/paths/padrões)
+        if (shouldIgnore(item.name, itemRelPosix)) {
+          console.log('Skipping directory (ignored):', itemRelPosix);
           continue;
         }
+        console.log('Processing directory:', itemRelPosix);
         processDir(itemPath, itemRel);
         continue;
       }
 
       const lower = item.name.toLowerCase();
       if (!(item.name.endsWith('.md') || item.name.endsWith('.html'))) continue;
-      if (EXCLUDE.has(lower)) continue;
+      // Respeita ignorados
+      if (shouldIgnore(item.name, itemRelPosix)) continue;
 
       const topic = path.basename(item.name, path.extname(item.name));
       const group = relPath ? relPath.split(path.sep).join('/') : null;
@@ -335,7 +409,7 @@ export default function build() {
         content = content.replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
       }
 
-      const sidebar = generateSidebarHTML(bodyPath, group, topic);
+  const sidebar = generateSidebarHTML(bodyPath, group, topic, { ignore: ignorePatterns });
 
       const outDir = path.join(distPath, relPath);
       fs.mkdirSync(outDir, { recursive: true });
@@ -355,7 +429,7 @@ export default function build() {
   processDir(bodyPath);
 
   // 404 com sidebar
-  const sidebar404 = generateSidebarHTML(bodyPath, null, null);
+  const sidebar404 = generateSidebarHTML(bodyPath, null, null, { ignore: ignorePatterns });
   fs.writeFileSync(
     path.join(distPath, '404.html'),
     rewriteForBase(headerInline + sidebar404 + `<main class="rhyla-main">${notFoundHTML}</main>`, basePath)
