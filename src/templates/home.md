@@ -15,6 +15,7 @@ Rhyla is a lightweight, template‑driven documentation generator. Write in Mark
 - Clean URLs: `/topic` and `/group/topic` in dev and build.
 - Static build: one `dist/` folder, drop on any static host (GitHub Pages, Vercel, Netlify).
 - Public assets: serve from `/public` (images, fonts, etc.).
+- Smart tagging system: with HTTP method tags and version indicators ([learn more](/tag-new)).
 
 ---
 
@@ -50,8 +51,11 @@ The sidebar mirrors the folder tree under `rhyla/body/`.
 
 Naming tips:
 - Prefer lowercase and hyphens: `quick-start.md`, `advanced-install.md`.
+- Use HTTP method prefixes for API docs: `get-users.md`, `post-login.md`.
+- Add version or status tags at the end: `post-login-new.md`, `get-users-v1.md`.
 - Avoid spaces/special characters.
 - Keep names short and descriptive.
+- Check out the [tag system guide](/tag-new) for more details.
 
 ---
 

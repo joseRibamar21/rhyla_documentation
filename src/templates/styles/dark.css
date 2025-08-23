@@ -99,3 +99,9 @@ code {
   border-radius: 6px;
   overflow-x: auto;
 }
+
+hr{
+  border: 1px solid #444;
+  margin: 24px 0;
+}
+
