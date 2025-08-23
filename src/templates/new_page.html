@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Páginas de API - Rhyla</title>
+    <link rel="stylesheet" href="/styles/page-generator.css">
+</head>
+
+<body class="page-generator-component">
+    <div class="page-generator">
+        <h1>Gerador de Páginas de API</h1>
+        <p>Use este formulário para gerar documentação de APIs RESTful automaticamente.</p>
+
+        <div class="pg-panel">
+            <h3>Informações da Rota</h3>
+
+            <div class="pg-form-group">
+                <label for="route-title">Título da Rota</label>
+                <input type="text" id="route-title" class="pg-form-control" placeholder="Exemplo: Criar Usuário">
+            </div>
+
+            <div class="pg-form-group">
+                <label for="route-path">Caminho da Rota</label>
+                <input type="text" id="route-path" class="pg-form-control" placeholder="Exemplo: /api/users">
+            </div>
+
+            <div class="pg-form-group">
+                <label>Método HTTP</label>
+                <div class="pg-method-select">
+                    <button class="pg-method-btn pg-get active" data-method="GET">GET</button>
+                    <button class="pg-method-btn pg-post" data-method="POST">POST</button>
+                    <button class="pg-method-btn pg-put" data-method="PUT">PUT</button>
+                    <button class="pg-method-btn pg-delete" data-method="DELETE">DELETE</button>
+                    <button class="pg-method-btn pg-patch" data-method="PATCH">PATCH</button>
+                </div>
+            </div>
+
+            <div class="pg-form-group pg-tag-section">
+                <label>Tags</label>
+                <div class="pg-tags">
+                    <label class="pg-tag-option">
+                        <input type="checkbox" name="tags" value="new"> Novo
+                    </label>
+                    <label class="pg-tag-option">
+                        <input type="checkbox" name="tags" value="deprecated"> Obsoleto
+                    </label>
+                    <label class="pg-tag-option">
+                        <input type="checkbox" name="tags" value="v1"> v1
+                    </label>
+                    <label class="pg-tag-option">
+                        <input type="checkbox" name="tags" value="v2"> v2
+                    </label>
+                    <label class="pg-tag-option">
+                        <input type="checkbox" name="tags" value="v3"> v3
+                    </label>
+                </div>
+            </div>
+
+            <div class="pg-form-group">
+                <label for="route-description">Descrição</label>
+                <textarea id="route-description" class="pg-form-control"
+                    placeholder="Descreva o propósito desta rota..."></textarea>
+            </div>
+        </div>
+
+        <div class="pg-panel">
+            <h3>Parâmetros da Requisição</h3>
+
+            <div class="pg-row">
+                <div class="pg-col">
+                    <div class="pg-form-group">
+                        <label for="request-body">Corpo da Requisição (JSON)</label>
+                        <textarea id="request-body" class="pg-form-control" 
+                            placeholder='{"name": "string", "email": "string"}'></textarea>
+                    </div>
+                </div>
+                <div class="pg-col">
+                    <div class="pg-form-group">
+                        <label for="request-headers">Headers</label>
+                        <textarea id="request-headers" class="pg-form-control"
+                            placeholder="Content-Type: application/json&#10;Authorization: Bearer {token}"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pg-form-group">
+                <label for="query-params">Parâmetros de URL</label>
+                <textarea id="query-params" class="pg-form-control"
+                    placeholder="page: número da página (opcional)&#10;limit: registros por página (opcional)"></textarea>
+            </div>
+        </div>
+
+        <div class="pg-panel">
+            <h3>Respostas</h3>
+
+            <div class="pg-form-group">
+                <label for="response-success">Resposta de Sucesso (200)</label>
+                <textarea id="response-success" class="pg-form-control" 
+                    placeholder='{"id": 1, "name": "John Doe", "email": "john@example.com", "createdAt": "2025-08-23T10:00:00Z"}'></textarea>
+            </div>
+
+            <div class="pg-form-group">
+                <label for="response-error">Respostas de Erro</label>
+                <textarea id="response-error" class="pg-form-control" 
+                    placeholder="400 Bad Request:&#10;{&#10;  \"error\": \"Validation error\",&#10;  \"message\": \"Email is required\"&#10;}&#10;&#10;404 Not Found:&#10;{&#10;  \"error\": \"Not found\",&#10;  \"message\": \"User not found\"&#10;}"></textarea>
+            </div>
+        </div>
+
+        <div class="pg-panel">
+            <h3>Exemplo de Comando cURL</h3>
+            <div class="pg-form-group">
+                <label for="curl-command">Comando cURL</label>
+                <textarea id="curl-command" class="pg-form-control"
+                    placeholder="curl -X POST \\\n  https://api.example.com/api/users \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer YOUR_TOKEN' \\\n  -d '{\"name\": \"John Doe\", \"email\": \"john@example.com\"}'"></textarea>
+            </div>
+        </div>
+
+        <div class="pg-form-group">
+            <h3>Pré-visualização</h3>
+            <div class="pg-preview">
+                # Criar Usuário
+
+                <span class="http-method pg-post">POST</span> <span class="post-tag post-tag--new">new</span> <span
+                    class="post-tag post-tag--v1">v1</span>
+
+                `/api/users`
+
+                Cria um novo usuário no sistema.
+
+                ## Request
+
+                ### Headers
+                ```
+                Content-Type: application/json
+                Authorization: Bearer {token}
+                ```
+
+                ### Body
+                ```json
+                {
+                "name": "John Doe",
+                "email": "john@example.com"
+                }
+                ```
+
+                ## Response
+
+                ### 200 OK
+                ```json
+                {
+                "id": 1,
+                "name": "John Doe",
+                "email": "john@example.com",
+                "createdAt": "2025-08-23T10:00:00Z"
+                }
+                ```
+
+                ### Erros
+                ```
+                400 Bad Request:
+                {
+                "error": "Validation error",
+                "message": "Email is required"
+                }
+
+                404 Not Found:
+                {
+                "error": "Not found",
+                "message": "User not found"
+                }
+                ```
+
+                ## Exemplo cURL
+                ```bash
+                curl -X POST \
+                https://api.example.com/api/users \
+                -H 'Content-Type: application/json' \
+                -H 'Authorization: Bearer YOUR_TOKEN' \
+                -d '{
+                "name": "John Doe",
+                "email": "john@example.com"
+                }'
+                ```
+            </div>
+        </div>
+
+        <div class="pg-form-group">
+        <button id="generate-btn" class="pg-btn-primary">Gerar Página</button>
+    </div>
+    </div>
+
+    <script>
+        // Elementos do formulário
+        const routeTitle = document.getElementById('route-title');
+        const routePath = document.getElementById('route-path');
+        const routeDescription = document.getElementById('route-description');
+        const requestBody = document.getElementById('request-body');
+        const requestHeaders = document.getElementById('request-headers');
+        const queryParams = document.getElementById('query-params');
+        const responseSuccess = document.getElementById('response-success');
+        const responseError = document.getElementById('response-error');
+        const curlCommand = document.getElementById('curl-command');
+        const previewElement = document.querySelector('.pg-preview');
+
+        // Variável para armazenar o método HTTP selecionado
+        let selectedMethod = 'GET';
+
+        // Código para selecionar método HTTP
+        document.querySelectorAll('.pg-method-btn').forEach(button => {
+            button.addEventListener('click', function () {
+                // Remove classe active de todos os botões
+                document.querySelectorAll('.pg-method-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+
+                // Adiciona classe active ao botão clicado
+                this.classList.add('active');
+
+                // Atualiza o método selecionado
+                selectedMethod = this.dataset.method;
+
+                // Gera o cURL e atualiza a pré-visualização
+                generateCurl();
+                updatePreview();
+            });
+        });
+
+        // Função para gerar o comando cURL com base nos campos do formulário
+        function generateCurl() {
+            // Verifica se o caminho da rota está preenchido
+            if (!routePath.value) {
+                return;
+            }
+
+            // Inicia o comando cURL com o método e caminho
+            let curl = `curl -X ${selectedMethod} \\\n  https://api.example.com${routePath.value}`;
+
+            // Adiciona headers se houver
+            const headerLines = requestHeaders.value.trim().split('\n');
+            if (headerLines[0] !== '') {
+                headerLines.forEach(header => {
+                    if (header.trim()) {
+                        const [key, value] = header.split(':').map(part => part.trim());
+                        curl += ` \\\n  -H '${key}: ${value}'`;
+                    }
+                });
+            }
+
+            // Adiciona parâmetros de query se houver
+            const queryParamsLines = queryParams.value.trim().split('\n');
+            if (queryParamsLines[0] !== '' && (selectedMethod === 'GET' || selectedMethod === 'DELETE')) {
+                let queryString = '?';
+                queryParamsLines.forEach((param, index) => {
+                    if (param.trim()) {
+                        const [key] = param.split(':').map(part => part.trim());
+                        queryString += `${key}=value`;
+                        if (index < queryParamsLines.length - 1 && queryParamsLines[index + 1].trim()) {
+                            queryString += '&';
+                        }
+                    }
+                });
+
+                if (queryString !== '?') {
+                    curl = curl.replace(routePath.value, `${routePath.value}${queryString}`);
+                }
+            }
+
+            // Adiciona corpo da requisição se houver e se for um método adequado
+            if (requestBody.value.trim() && ['POST', 'PUT', 'PATCH'].includes(selectedMethod)) {
+                curl += ` \\\n  -d '${requestBody.value.trim().replace(/\n/g, '\n  ')}'`;
+            }
+
+            // Atualiza o campo de comando cURL
+            curlCommand.value = curl;
+        }
+
+        // Função para atualizar a pré-visualização
+        function updatePreview() {
+            // Obtém as tags selecionadas
+            const selectedTags = [];
+            document.querySelectorAll('input[name="tags"]:checked').forEach(tag => {
+                selectedTags.push(tag.value);
+            });
+
+            // Cria as tags HTML
+            const tagsHtml = selectedTags.map(tag => {
+                if (tag === 'new') return '<span class="post-tag post-tag--new">new</span>';
+                if (tag === 'deprecated') return '<span class="post-tag post-tag--dep">deprecated</span>';
+                return `<span class="post-tag post-tag--v${tag.substring(1)}">${tag}</span>`;
+            }).join(' ');
+
+            // Gera a pré-visualização
+            let preview = '';
+
+            // Título
+            preview += `# ${routeTitle.value || 'Título da Rota'}\n\n`;
+
+            // Método HTTP e tags
+            preview += `<span class="http-method pg-${selectedMethod.toLowerCase()}">${selectedMethod}</span> ${tagsHtml}\n\n`;
+
+            // Caminho
+            preview += `\`${routePath.value || '/api/endpoint'}\`\n\n`;
+
+            // Descrição
+            preview += `${routeDescription.value || 'Descrição da rota...'}\n\n`;
+
+            // Request
+            preview += `## Request\n\n`;
+
+            // Headers
+            if (requestHeaders.value.trim()) {
+                preview += `### Headers\n\`\`\`\n${requestHeaders.value}\n\`\`\`\n\n`;
+            }
+
+            // Query Params
+            if (queryParams.value.trim()) {
+                preview += `### Query Parameters\n\`\`\`\n${queryParams.value}\n\`\`\`\n\n`;
+            }
+
+            // Body
+            if (requestBody.value.trim()) {
+                preview += `### Body\n\`\`\`json\n${requestBody.value}\n\`\`\`\n\n`;
+            }
+
+            // Response
+            preview += `## Response\n\n`;
+
+            // Success
+            if (responseSuccess.value.trim()) {
+                preview += `### 200 OK\n\`\`\`json\n${responseSuccess.value}\n\`\`\`\n\n`;
+            }
+
+            // Errors
+            if (responseError.value.trim()) {
+                preview += `### Erros\n\`\`\`\n${responseError.value}\n\`\`\`\n\n`;
+            }
+
+            // cURL
+            preview += `## Exemplo cURL\n\`\`\`bash\n${curlCommand.value}\n\`\`\``;
+
+            // Atualiza o elemento de pré-visualização
+            previewElement.innerHTML = preview;
+        }
+
+        // Adiciona event listeners para todos os campos do formulário
+        const formFields = [
+            routeTitle, routePath, routeDescription, requestBody,
+            requestHeaders, queryParams, responseSuccess, responseError
+        ];
+
+        formFields.forEach(field => {
+            field.addEventListener('input', function () {
+                generateCurl();
+                updatePreview();
+            });
+        });
+
+        // Event listeners para os checkboxes de tags
+        document.querySelectorAll('input[name="tags"]').forEach(checkbox => {
+            checkbox.addEventListener('change', updatePreview);
+        });
+
+        // Permite editar diretamente o comando cURL
+        curlCommand.addEventListener('input', updatePreview);
+
+        // Funcionalidade para gerar a página
+        document.getElementById('generate-btn').addEventListener('click', function () {
+            alert('Funcionalidade de geração será implementada em breve!');
+        });
+
+        // Inicializa a pré-visualização
+        generateCurl();
+        updatePreview();
+    </script>
+</body>
+
+</html>

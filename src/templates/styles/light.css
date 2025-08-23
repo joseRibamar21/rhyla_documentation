@@ -8,6 +8,20 @@
   --rh-active-bg: rgba(0,102,255,0.08);
   --rh-muted: #6b7280;
   --rh-table-border: #e5e7eb;
+  
+  /* Page Generator Variables */
+  --pg-border-color: #e2e8f0;
+  --pg-input-bg: #ffffff;
+  --pg-text-color: #1e293b;
+  --pg-primary-color: #0066ff;
+  --pg-primary-hover: #0055d4;
+  --pg-code-bg: #f8fafc;
+  --pg-method-text: #ffffff;
+  --pg-get-bg: #61affe;
+  --pg-post-bg: #49cc90;
+  --pg-put-bg: #fca130;
+  --pg-delete-bg: #f93e3e;
+  --pg-patch-bg: #50e3c2;
 }
 
 /* Tags HTTP */
