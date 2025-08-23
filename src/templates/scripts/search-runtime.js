@@ -257,6 +257,11 @@
                 // Prepara a URL base para a navegação
                 let routeHref = r.route || '#';
                 
+                // Adiciona .html à rota se não for a home (/) e não tiver extensão ou fragmento
+                if (routeHref !== '/' && !routeHref.includes('.') && !routeHref.includes('#')) {
+                    routeHref = routeHref + '.html';
+                }
+                
                 // Adiciona fragmento ou query string conforme disponibilidade
                 if (r.headingId) {
                     // Se temos um ID de cabeçalho específico, adiciona como fragmento
