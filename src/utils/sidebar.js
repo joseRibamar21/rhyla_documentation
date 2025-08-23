@@ -172,12 +172,14 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       const isOpen = ag === childRel || ag.startsWith(childRel + '/'); // abre ancestrais
       const padHeader = depth * INDENT; // pasta atual
       const padContent = (depth + 0.3) * INDENT; // conteúdo dentro da pasta
-      // Exibir nome da pasta sem underscores (visual apenas)
-      const displayDir = String(d).replace(/_/g, ' ');
+  // Exibir nome da pasta sem underscores (visual apenas)
+  const displayDir = String(d).replace(/_/g, ' ');
+  // Ícone especial para pasta de desenvolvimento
+  const dirIcon = String(d).toLowerCase() === 'kit_dev_rhyla' ? '⚙️' : '📁';
       html += `
         <li class="group ${isOpen ? 'open' : ''}">
           <div class="group-header" style="padding-left:${padHeader}px;" onclick="toggleFolder(this)">
-            <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> 📁 ${displayDir}
+    <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> ${dirIcon} ${displayDir}
           </div>
           <ul class="group-content" style="max-height:0; padding-left:${padContent}px;">
       `;

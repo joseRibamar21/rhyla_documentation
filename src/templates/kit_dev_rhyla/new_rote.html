@@ -4,26 +4,29 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Páginas de API - Rhyla</title>
+    <title>Generator Routes - Rhyla</title>
     <link rel="stylesheet" href="/styles/page-generator.css">
 </head>
 
 <body class="page-generator-component">
     <div class="page-generator">
-        <h1>Gerador de Páginas de API</h1>
-        <p>Use este formulário para gerar documentação de APIs RESTful automaticamente.</p>
+    <h1>API Page Generator</h1>
+    <p>Use this form to generate RESTful API documentation automatically.</p>
 
         <div class="pg-panel">
-            <h3>Informações da Rota</h3>
+            <h3>Route Information</h3>
 
             <div class="pg-form-group">
-                <label for="route-title">Título da Rota</label>
-                <input type="text" id="route-title" class="pg-form-control" placeholder="Exemplo: Criar Usuário">
+                <label for="route-title">Route Title</label>
+                <input type="text" id="route-title" class="pg-form-control" placeholder="Example: Create User">
             </div>
 
             <div class="pg-form-group">
-                <label for="route-path">Caminho da Rota</label>
-                <input type="text" id="route-path" class="pg-form-control" placeholder="Exemplo: /api/users">
+                <label for="route-path">Route Path</label>
+                <input type="text" id="route-path" class="pg-form-control" placeholder="Example: /api/users">
+            </div>
+            <div class="pg-form-group">
+                <small class="pg-note">Note: the <strong>Route Path</strong> field will be used to create the file inside <code>rhyla-docs/body</code> — the last segment becomes the file name (spaces will be converted to <code>_</code>). Missing folders will be created automatically. Do not include extensions such as <code>.md</code> or <code>.html</code> in this field.</small>
             </div>
 
             <div class="pg-form-group">
@@ -41,19 +44,19 @@
                 <label>Tags</label>
                 <div class="pg-tags">
                     <label class="pg-tag-option">
-                        <input type="checkbox" name="tags" value="new"> Novo
+                        <input type="radio" name="tags" value="new"> Novo
                     </label>
                     <label class="pg-tag-option">
-                        <input type="checkbox" name="tags" value="deprecated"> Obsoleto
+                        <input type="radio" name="tags" value="dep"> Obsoleto
                     </label>
                     <label class="pg-tag-option">
-                        <input type="checkbox" name="tags" value="v1"> v1
+                        <input type="radio" name="tags" value="v1"> v1
                     </label>
                     <label class="pg-tag-option">
-                        <input type="checkbox" name="tags" value="v2"> v2
+                        <input type="radio" name="tags" value="v2"> v2
                     </label>
                     <label class="pg-tag-option">
-                        <input type="checkbox" name="tags" value="v3"> v3
+                        <input type="radio" name="tags" value="v3"> v3
                     </label>
                 </div>
             </div>
@@ -66,12 +69,12 @@
         </div>
 
         <div class="pg-panel">
-            <h3>Parâmetros da Requisição</h3>
+            <h3>Request Parameters</h3>
 
             <div class="pg-row">
                 <div class="pg-col">
                     <div class="pg-form-group">
-                        <label for="request-body">Corpo da Requisição (JSON)</label>
+                        <label for="request-body">Request Body (JSON)</label>
                         <textarea id="request-body" class="pg-form-control" 
                             placeholder='{"name": "string", "email": "string"}'></textarea>
                     </div>
@@ -86,48 +89,48 @@
             </div>
 
             <div class="pg-form-group">
-                <label for="query-params">Parâmetros de URL</label>
+                <label for="query-params">URL Parameters</label>
                 <textarea id="query-params" class="pg-form-control"
-                    placeholder="page: número da página (opcional)&#10;limit: registros por página (opcional)"></textarea>
+                    placeholder="page: page number (optional)&#10;limit: items per page (optional)"></textarea>
             </div>
         </div>
 
         <div class="pg-panel">
-            <h3>Respostas</h3>
+            <h3>Responses</h3>
 
             <div class="pg-form-group">
-                <label for="response-success">Resposta de Sucesso (200)</label>
+                <label for="response-success">Success Response (200)</label>
                 <textarea id="response-success" class="pg-form-control" 
                     placeholder='{"id": 1, "name": "John Doe", "email": "john@example.com", "createdAt": "2025-08-23T10:00:00Z"}'></textarea>
             </div>
 
             <div class="pg-form-group">
-                <label for="response-error">Respostas de Erro</label>
+                <label for="response-error">Error Responses</label>
                 <textarea id="response-error" class="pg-form-control" 
                     placeholder="400 Bad Request:&#10;{&#10;  \"error\": \"Validation error\",&#10;  \"message\": \"Email is required\"&#10;}&#10;&#10;404 Not Found:&#10;{&#10;  \"error\": \"Not found\",&#10;  \"message\": \"User not found\"&#10;}"></textarea>
             </div>
         </div>
 
         <div class="pg-panel">
-            <h3>Exemplo de Comando cURL</h3>
+            <h3>cURL Example</h3>
             <div class="pg-form-group">
-                <label for="curl-command">Comando cURL</label>
+                <label for="curl-command">cURL Command</label>
                 <textarea id="curl-command" class="pg-form-control"
                     placeholder="curl -X POST \\\n  https://api.example.com/api/users \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer YOUR_TOKEN' \\\n  -d '{\"name\": \"John Doe\", \"email\": \"john@example.com\"}'"></textarea>
             </div>
         </div>
 
         <div class="pg-form-group">
-            <h3>Pré-visualização</h3>
+            <h3>Preview</h3>
             <div class="pg-preview">
-                # Criar Usuário
+                # Create User
 
                 <span class="http-method pg-post">POST</span> <span class="post-tag post-tag--new">new</span> <span
                     class="post-tag post-tag--v1">v1</span>
 
                 `/api/users`
 
-                Cria um novo usuário no sistema.
+                Creates a new user in the system.
 
                 ## Request
 
@@ -157,7 +160,7 @@
                 }
                 ```
 
-                ### Erros
+                ### Errors
                 ```
                 400 Bad Request:
                 {
@@ -172,7 +175,7 @@
                 }
                 ```
 
-                ## Exemplo cURL
+                ## cURL Example
                 ```bash
                 curl -X POST \
                 https://api.example.com/api/users \
@@ -187,7 +190,7 @@
         </div>
 
         <div class="pg-form-group">
-        <button id="generate-btn" class="pg-btn-primary">Gerar Página</button>
+    <button id="generate-btn" class="pg-btn-primary">Generate Page</button>
     </div>
     </div>
 
@@ -207,10 +210,10 @@
         const curlCommand = document.getElementById('curl-command');
         const previewElement = document.querySelector('.pg-preview');
 
-        // Variável para armazenar o método HTTP selecionado
+    // Variable to store the selected HTTP method
         let selectedMethod = 'GET';
 
-        // Código para selecionar método HTTP
+    // Code to select HTTP method
         document.querySelectorAll('.pg-method-btn').forEach(button => {
             button.addEventListener('click', function () {
                 // Remove classe active de todos os botões
@@ -230,7 +233,7 @@
             });
         });
 
-        // Função para gerar o comando cURL com base nos campos do formulário
+    // Function to generate the cURL command from the form fields
         function generateCurl() {
             // Verifica se o caminho da rota está preenchido
             if (!routePath.value) {
@@ -279,9 +282,9 @@
             curlCommand.value = curl;
         }
 
-        // Função para atualizar a pré-visualização
+    // Function to update the preview
         function updatePreview() {
-            // Obtém as tags selecionadas
+            // Get selected tags
             const selectedTags = [];
             document.querySelectorAll('input[name="tags"]:checked').forEach(tag => {
                 selectedTags.push(tag.value);
@@ -290,23 +293,25 @@
             // Cria as tags HTML
             const tagsHtml = selectedTags.map(tag => {
                 if (tag === 'new') return '<span class="post-tag post-tag--new">new</span>';
-                if (tag === 'deprecated') return '<span class="post-tag post-tag--dep">deprecated</span>';
-                return `<span class="post-tag post-tag--v${tag.substring(1)}">${tag}</span>`;
+                if (tag === 'dep') return '<span class="post-tag post-tag--dep">dep</span>';
+                // version tags start with 'v'
+                if (tag.startsWith('v')) return `<span class="post-tag post-tag--v">${tag}</span>`;
+                return `<span class="post-tag">${tag}</span>`;
             }).join(' ');
 
-            // Gera a pré-visualização
+            // Build the preview
             let preview = '';
 
-            // Título
+            // Title
             preview += `# ${routeTitle.value || 'Título da Rota'}\n\n`;
 
-            // Método HTTP e tags
+            // HTTP method and tags
             preview += `<span class="http-method pg-${selectedMethod.toLowerCase()}">${selectedMethod}</span> ${tagsHtml}\n\n`;
 
-            // Caminho
+            // Path
             preview += `\`${routePath.value || '/api/endpoint'}\`\n\n`;
 
-            // Descrição
+            // Description
             preview += `${routeDescription.value || 'Descrição da rota...'}\n\n`;
 
             // Request
@@ -347,7 +352,7 @@
             previewElement.innerHTML = preview;
         }
 
-        // Adiciona event listeners para todos os campos do formulário
+    // Add event listeners for all form fields
         const formFields = [
             routeTitle, routePath, routeDescription, requestBody,
             requestHeaders, queryParams, responseSuccess, responseError
@@ -360,9 +365,9 @@
             });
         });
 
-        // Event listeners para os checkboxes de tags
-        document.querySelectorAll('input[name="tags"]').forEach(checkbox => {
-            checkbox.addEventListener('change', updatePreview);
+        // Event listeners for the tag inputs
+        document.querySelectorAll('input[name="tags"]').forEach(input => {
+            input.addEventListener('change', updatePreview);
         });
 
         // Permite editar diretamente o comando cURL
@@ -379,7 +384,7 @@
             // Método HTTP (mantemos a tag HTML para estilização)
             mdContent += `<span class="http-method pg-${selectedMethod.toLowerCase()}">${selectedMethod}</span> `;
             
-            // Tags (mantemos as tags HTML para estilização)
+            // Tags (keep HTML spans for styling)
             const selectedTags = [];
             document.querySelectorAll('input[name="tags"]:checked').forEach(tag => {
                 const value = tag.value;
@@ -388,7 +393,7 @@
                 // Ajustar classe para versões
                 if (value.startsWith('v')) {
                     tagClass = 'v';
-                } else if (value === 'deprecated') {
+                } else if (value === 'dep') {
                     tagClass = 'dep';
                 }
                 
@@ -444,57 +449,47 @@
             return mdContent;
         }
 
-        // Funcionalidade para gerar a página
+        // Functionality to generate the page
         document.getElementById('generate-btn').addEventListener('click', function () {
-            // Verificar se campos obrigatórios estão preenchidos
+            // Validate required fields
             if (!routePath.value) {
-                alert('Por favor, preencha o caminho da rota antes de gerar o arquivo.');
+                alert('Please fill the route path before generating the file.');
                 routePath.focus();
                 return;
             }
-            
-            // Obter tags selecionadas
+
+            // Get selected tag (only one allowed)
             const selectedTags = [];
             document.querySelectorAll('input[name="tags"]:checked').forEach(tag => {
                 selectedTags.push(tag.value);
             });
-            
-            // Construir caminho usando a função importada
+
+            // Build path using the imported function
             const filePath = buildFilePath(routePath.value, selectedMethod, selectedTags);
             const content = getPreviewContent();
-            
-            // Mostrar feedback visual
+
+            // Visual feedback
             const btn = this;
             btn.disabled = true;
-            btn.innerText = 'Gerando...';
-            
+            btn.innerText = 'Generating...';
+
             generateMDFile(filePath, content)
                 .then(result => {
-                    // Construir uma URL para o arquivo gerado para que o usuário possa acessá-lo
                     const relPath = result.path;
                     const fileUrl = window.location.origin + relPath.replace(/\.md$/, '.html');
-                    
-                    const message = `
-Arquivo gerado com sucesso!
 
-Caminho: ${result.path}
-Método: ${selectedMethod}
-Nome do arquivo: ${filePath.split('/').pop()}
+                    const message = `\nFile generated successfully!\n\nPath: ${result.path}\nMethod: ${selectedMethod}\nFile name: ${filePath.split('/').pop()}\n\nYou can access the page at:\n${fileUrl}`;
 
-Você pode acessar a página em:
-${fileUrl}
-                    `;
-                    
                     alert(message);
-                    console.log('Arquivo gerado:', result);
+                    console.log('File generated:', result);
                 })
                 .catch(error => {
-                    alert(`Erro ao gerar arquivo: ${error.message}`);
-                    console.error('Erro:', error);
+                    alert(`Error generating file: ${error.message}`);
+                    console.error('Error:', error);
                 })
                 .finally(() => {
                     btn.disabled = false;
-                    btn.innerText = 'Gerar Página';
+                    btn.innerText = 'Generate Page';
                 });
         });
 

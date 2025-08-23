@@ -294,7 +294,7 @@ export default function build() {
 
   const EXCLUDE = new Set([
     'notfound.html', 'notfound.md', 'notfound.htm', 'notfound',
-    'search.html', '.search.html', 'search.md', '.search.md'
+    'search.html', '.search.html', 'search.md', '.search.md', 'page-generator.css'
   ]);
 
   // Função recursiva para gerar páginas a partir de rhyla/body (sem página de busca)
@@ -306,6 +306,10 @@ export default function build() {
       const itemRel = path.join(relPath, item.name);
 
       if (item.isDirectory()) {
+        // Skip development-only folder
+        if (item.name.toLowerCase() === 'kit_dev_rhyla') {
+          continue;
+        }
         processDir(itemPath, itemRel);
         continue;
       }
