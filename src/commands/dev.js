@@ -7,12 +7,15 @@ import spawn from "cross-spawn";
 import chokidar from "chokidar";
 import { fileURLToPath } from "url";
 import { generateSidebarHTML } from "../utils/sidebar.js";
+import { generateMDFile } from "../templates/scripts/generatePages.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default function dev() {
   const app = express();
+  app.use(express.json()); // Para processar requisições JSON
+  
   const md = new markdownIt();
   const rhylaPath = path.join(process.cwd(), "rhyla-docs"); // Alterado para rhyla-docs para evitar conflito
 
@@ -74,6 +77,79 @@ export default function dev() {
     const cfg = path.join(rhylaPath, 'config.json');
     if (fs.existsSync(cfg)) return res.sendFile(cfg);
     res.status(404).send('{}');
+  });
+  
+  // Endpoint para gerar arquivos markdown
+  app.post('/generate-page', (req, res) => {
+    try {
+      const { filePath, content } = req.body;
+      
+      if (!filePath || !content) {
+        return res.status(400).json({
+          error: 'Dados incompletos',
+          message: 'É necessário fornecer o caminho do arquivo e o conteúdo'
+        });
+      }
+      
+      // Sanitizar o filePath - remover qualquer componente que possa causar problemas de segurança
+      const sanitizedPath = filePath.replace(/\.\./g, '').replace(/\/+/g, '/');
+      
+      // Extrair o diretório e nome do arquivo do caminho sanitizado
+      const dirPath = path.dirname(sanitizedPath);
+      
+      // Garantir que o nome do arquivo termina com .md
+      let fileName = path.basename(sanitizedPath);
+      if (!fileName.endsWith('.md')) {
+        fileName += '.md';
+      }
+      
+      console.log(`Gerando arquivo: ${dirPath}/${fileName}`);
+      
+      // Criar diretório completo para o arquivo (removendo a barra inicial se existir)
+      const fullDirPath = path.join(
+        rhylaPath, 
+        'body', 
+        dirPath.startsWith('/') ? dirPath.substring(1) : dirPath
+      );
+      
+      if (!fs.existsSync(fullDirPath)) {
+        console.log(`Criando diretório: ${fullDirPath}`);
+        fs.mkdirSync(fullDirPath, { recursive: true });
+      }
+      
+      // Caminho completo para o arquivo
+      const fullPath = path.join(fullDirPath, fileName);
+      
+      // Escrever o conteúdo no arquivo
+      fs.writeFileSync(fullPath, content, 'utf8');
+      console.log(`Arquivo gerado: ${fullPath}`);
+      
+      // Atualizar o índice de busca
+      runSearchIndex();
+      
+      // Calcular caminho relativo para a resposta
+      let relativePath;
+      if (dirPath === '/' || dirPath === '.') {
+        relativePath = `/${fileName}`;
+      } else {
+        const normalizedDir = dirPath.startsWith('/') ? dirPath : `/${dirPath}`;
+        relativePath = `${normalizedDir}/${fileName}`;
+      }
+      
+      // Retornar o resultado
+      res.json({
+        success: true,
+        path: relativePath,
+        message: 'Arquivo gerado com sucesso'
+      });
+      
+    } catch (error) {
+      console.error('Erro ao gerar arquivo:', error);
+      res.status(500).json({
+        error: 'Erro interno',
+        message: error.message
+      });
+    }
   });
 
   // Ler header 

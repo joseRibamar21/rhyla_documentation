@@ -191,7 +191,10 @@
     </div>
     </div>
 
-    <script>
+    <script type="module">
+        // Importar funções do gerador de páginas
+        import { buildFilePath, generateMDFile } from '/scripts/generatePages.js';
+        
         // Elementos do formulário
         const routeTitle = document.getElementById('route-title');
         const routePath = document.getElementById('route-path');
@@ -365,9 +368,134 @@
         // Permite editar diretamente o comando cURL
         curlCommand.addEventListener('input', updatePreview);
 
+        // Função para obter o conteúdo do preview como markdown formatado
+        function getPreviewContent() {
+            // Vamos construir o conteúdo markdown manualmente a partir dos campos do formulário
+            let mdContent = '';
+            
+            // Título
+            mdContent += `# ${routeTitle.value || 'Título da Rota'}\n\n`;
+            
+            // Método HTTP (mantemos a tag HTML para estilização)
+            mdContent += `<span class="http-method pg-${selectedMethod.toLowerCase()}">${selectedMethod}</span> `;
+            
+            // Tags (mantemos as tags HTML para estilização)
+            const selectedTags = [];
+            document.querySelectorAll('input[name="tags"]:checked').forEach(tag => {
+                const value = tag.value;
+                let tagClass = value;
+                
+                // Ajustar classe para versões
+                if (value.startsWith('v')) {
+                    tagClass = 'v';
+                } else if (value === 'deprecated') {
+                    tagClass = 'dep';
+                }
+                
+                selectedTags.push(`<span class="post-tag post-tag--${tagClass}">${value}</span>`);
+            });
+            
+            if (selectedTags.length > 0) {
+                mdContent += selectedTags.join(' ') + '\n\n';
+            } else {
+                mdContent += '\n\n';
+            }
+            
+            // Caminho
+            mdContent += `\`${routePath.value || '/api/endpoint'}\`\n\n`;
+            
+            // Descrição
+            mdContent += `${routeDescription.value || 'Descrição da rota...'}\n\n`;
+            
+            // Request
+            mdContent += `## Request\n\n`;
+            
+            // Headers
+            if (requestHeaders.value.trim()) {
+                mdContent += `### Headers\n\`\`\`\n${requestHeaders.value}\n\`\`\`\n\n`;
+            }
+            
+            // Query Params
+            if (queryParams.value.trim()) {
+                mdContent += `### Query Parameters\n\`\`\`\n${queryParams.value}\n\`\`\`\n\n`;
+            }
+            
+            // Body
+            if (requestBody.value.trim()) {
+                mdContent += `### Body\n\`\`\`json\n${requestBody.value}\n\`\`\`\n\n`;
+            }
+            
+            // Response
+            mdContent += `## Response\n\n`;
+            
+            // Success
+            if (responseSuccess.value.trim()) {
+                mdContent += `### 200 OK\n\`\`\`json\n${responseSuccess.value}\n\`\`\`\n\n`;
+            }
+            
+            // Errors
+            if (responseError.value.trim()) {
+                mdContent += `### Erros\n\`\`\`\n${responseError.value}\n\`\`\`\n\n`;
+            }
+            
+            // cURL
+            mdContent += `## Exemplo cURL\n\`\`\`bash\n${curlCommand.value}\n\`\`\``;
+            
+            return mdContent;
+        }
+
         // Funcionalidade para gerar a página
         document.getElementById('generate-btn').addEventListener('click', function () {
-            alert('Funcionalidade de geração será implementada em breve!');
+            // Verificar se campos obrigatórios estão preenchidos
+            if (!routePath.value) {
+                alert('Por favor, preencha o caminho da rota antes de gerar o arquivo.');
+                routePath.focus();
+                return;
+            }
+            
+            // Obter tags selecionadas
+            const selectedTags = [];
+            document.querySelectorAll('input[name="tags"]:checked').forEach(tag => {
+                selectedTags.push(tag.value);
+            });
+            
+            // Construir caminho usando a função importada
+            const filePath = buildFilePath(routePath.value, selectedMethod, selectedTags);
+            const content = getPreviewContent();
+            
+            // Mostrar feedback visual
+            const btn = this;
+            btn.disabled = true;
+            btn.innerText = 'Gerando...';
+            
+            generateMDFile(filePath, content)
+                .then(result => {
+                    // Construir uma URL para o arquivo gerado para que o usuário possa acessá-lo
+                    const relPath = result.path;
+                    const fileUrl = window.location.origin + relPath.replace(/\.md$/, '.html');
+                    
+                    const message = `
+Arquivo gerado com sucesso!
+
+Caminho: ${result.path}
+Método: ${selectedMethod}
+Nome do arquivo: ${filePath.split('/').pop()}
+
+Você pode acessar a página em:
+${fileUrl}
+                    `;
+                    
+                    alert(message);
+                    console.log('Arquivo gerado:', result);
+                })
+                .catch(error => {
+                    alert(`Erro ao gerar arquivo: ${error.message}`);
+                    console.error('Erro:', error);
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerText = 'Gerar Página';
+                });
         });
 
         // Inicializa a pré-visualização

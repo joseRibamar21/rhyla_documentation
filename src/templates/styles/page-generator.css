@@ -22,7 +22,7 @@
 }
 
 .pg-form-control {
-  width: 100%;
+  width: 90%;
   padding: 10px;
   border: 1px solid var(--pg-border-color);
   border-radius: 4px;

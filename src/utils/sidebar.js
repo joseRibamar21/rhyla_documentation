@@ -99,8 +99,10 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     let label = baseTopic;
     if (method) {
       const dashIdx = baseTopic.indexOf('-');
-      label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1).replace(/_/g, ' ') : baseTopic;
+      label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1) : baseTopic;
     }
+    // Apenas para visualização: substituir '_' por ' '
+    label = String(label).replace(/_/g, ' ');
     
     // Para páginas raiz, não adicionamos o '|'
     const displayContent = tagHTML(method, label, postTag, getPostTag(topic).tagType);
@@ -145,8 +147,10 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
         let label = baseTopic;
         if (method) {
           const dashIdx = baseTopic.indexOf('-');
-          label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1).replace(/_/g, ' ') : baseTopic;
+          label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1) : baseTopic;
         }
+        // Apenas para visualização: substituir '_' por ' '
+        label = String(label).replace(/_/g, ' ');
         
         // Para arquivos em subdiretórios, adicionamos o '|' antes do tópico se não houver método HTTP
         const prefix = method ? 
@@ -168,10 +172,12 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       const isOpen = ag === childRel || ag.startsWith(childRel + '/'); // abre ancestrais
       const padHeader = depth * INDENT; // pasta atual
       const padContent = (depth + 0.3) * INDENT; // conteúdo dentro da pasta
+      // Exibir nome da pasta sem underscores (visual apenas)
+      const displayDir = String(d).replace(/_/g, ' ');
       html += `
         <li class="group ${isOpen ? 'open' : ''}">
           <div class="group-header" style="padding-left:${padHeader}px;" onclick="toggleFolder(this)">
-            <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> 📁 ${d}
+            <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> 📁 ${displayDir}
           </div>
           <ul class="group-content" style="max-height:0; padding-left:${padContent}px;">
       `;
