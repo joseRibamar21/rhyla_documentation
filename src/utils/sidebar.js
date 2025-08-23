@@ -25,7 +25,62 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     if (m.startsWith('post-')) return 'POST';
     return null;
   };
-  const tagHTML = (method, label) => `<span class="http-tag http-tag--${method.toLowerCase()}">${method}</span> ${label}`;
+  
+  // Função para detectar e extrair pós-tags no formato subtag+nome+postag
+  const getPostTag = (topic) => {
+    // Lista de possíveis pós-tags conhecidas (não versões)
+    const knownPostTags = ['new', 'dep'];
+    
+    // Regex para identificar tags de versão (v1, v2, v3, v1.0.0, etc)
+    const versionTagRegex = /-v\d+(\.\d+)*$/;
+    
+    // Verificar primeiro se é uma tag de versão
+    if (versionTagRegex.test(topic)) {
+      const match = topic.match(versionTagRegex);
+      if (match) {
+        const vTag = match[0].substring(1); // remove o hífen inicial
+        const baseTopicName = topic.substring(0, topic.length - vTag.length - 1);
+        return {
+          baseTopic: baseTopicName,
+          postTag: vTag,
+          tagType: 'v' // indica que é uma tag de versão
+        };
+      }
+    }
+    
+    // Verifica se o tópico termina com um hífen seguido por uma pós-tag conhecida
+    for (const tag of knownPostTags) {
+      if (topic.endsWith(`-${tag}`)) {
+        const baseTopicName = topic.substring(0, topic.length - tag.length - 1);
+        return { 
+          baseTopic: baseTopicName, 
+          postTag: tag,
+          tagType: tag // o tipo é igual à tag para tags não-versão
+        };
+      }
+    }
+    
+    return { baseTopic: topic, postTag: null, tagType: null };
+  };
+  
+  const tagHTML = (method, label, postTag = null, tagType = null) => {
+    const methodHtml = method ? 
+      `<span class="http-tag http-tag--${method.toLowerCase()}">${method}</span> ` : 
+      '';
+      
+    let tagClass = postTag;
+    
+    // Se for uma tag de versão (v1, v2, etc), use a classe 'v'
+    if (postTag && (tagType === 'v' || postTag.startsWith('v'))) {
+      tagClass = 'v';
+    }
+    
+    const postTagHtml = postTag ? 
+      ` <span class="post-tag post-tag--${tagClass}">${postTag}</span>` : 
+      '';
+      
+    return `${methodHtml}${label}${postTagHtml}`;
+  };
 
   let html = `<aside class="rhyla-sidebar"><ul>`;
 
@@ -37,13 +92,19 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     if (topic.toLowerCase() === 'search' || topic.toLowerCase() === 'home') continue;
     const isActive = !activeGroup && activeTopic === topic;
     const method = methodOf(topic);
-    let label = topic;
+    
+    // Processar tópico para extrair pós-tag se houver
+    const { baseTopic, postTag } = getPostTag(topic);
+    
+    let label = baseTopic;
     if (method) {
-      const dashIdx = topic.indexOf('-');
-      label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
+      const dashIdx = baseTopic.indexOf('-');
+      label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1).replace(/_/g, ' ') : baseTopic;
     }
-    const prefix = method ? tagHTML(method, label) : '| ' + topic;
-    html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="./${topic}.html">${prefix}</a></li>`;
+    
+    // Para páginas raiz, não adicionamos o '|'
+    const displayContent = tagHTML(method, label, postTag, getPostTag(topic).tagType);
+    html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="./${topic}.html">${displayContent}</a></li>`;
   }
 
   // Render recursivo de diretórios
@@ -77,15 +138,24 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
         const ag = activeGroup || '';
         const isActive = (relForCompare === ag) && (activeTopic === topic);
         const method = methodOf(topic);
-        let label = topic;
+        
+        // Processar tópico para extrair pós-tag se houver
+        const { baseTopic, postTag } = getPostTag(topic);
+        
+        let label = baseTopic;
         if (method) {
-          const dashIdx = topic.indexOf('-');
-          label = dashIdx !== -1 ? topic.slice(dashIdx + 1).replace(/_/g, ' ') : topic;
+          const dashIdx = baseTopic.indexOf('-');
+          label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1).replace(/_/g, ' ') : baseTopic;
         }
-        const prefix = method ? tagHTML(method, label) : '| ' + topic;
-      // Construímos caminhos relativos corretos para os tópicos dentro de diretórios
-      const normalizedPath = normalizePath(relUrl);
-      const href = `./${normalizedPath}/${topic}.html`;
+        
+        // Para arquivos em subdiretórios, adicionamos o '|' antes do tópico se não houver método HTTP
+        const prefix = method ? 
+          tagHTML(method, label, postTag, getPostTag(topic).tagType) : 
+          tagHTML(null, '| ' + label, postTag, getPostTag(topic).tagType);
+          
+        // Construímos caminhos relativos corretos para os tópicos dentro de diretórios
+        const normalizedPath = normalizePath(relUrl);
+        const href = `./${normalizedPath}/${topic}.html`;
         html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="${href}" data-path="${normalizedPath}">${prefix}</a></li>`;
       }
     }
