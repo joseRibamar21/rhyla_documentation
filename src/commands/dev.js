@@ -49,7 +49,7 @@ export default function dev() {
   // Observa alterações em body
   chokidar.watch(path.join(rhylaPath, "body"), { ignoreInitial: true })
     .on("all", (event, filePath) => {
-      console.log(`📂 Alteração detectada: ${event} -> ${filePath}`);
+      console.log(`📂 Changes Detected: ${event} -> ${filePath}`);
       runSearchIndex();
     });
 
