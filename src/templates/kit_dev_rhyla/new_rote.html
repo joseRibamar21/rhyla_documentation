@@ -26,7 +26,15 @@
                 <input type="text" id="route-path" class="pg-form-control" placeholder="Example: /api/users">
             </div>
             <div class="pg-form-group">
-                <small class="pg-note">Note: the <strong>Route Path</strong> field will be used to create the file inside <code>rhyla-docs/body</code> — the last segment becomes the file name (spaces will be converted to <code>_</code>). Missing folders will be created automatically. Do not include extensions such as <code>.md</code> or <code>.html</code> in this field.</small>
+                <small class="pg-note">Note: the <strong>Route Path</strong> is used only for documentation display and cURL preview. It does not affect where the file is saved.</small>
+            </div>
+
+            <div class="pg-form-group">
+                <label for="document-path">Document Path</label>
+                <input type="text" id="document-path" class="pg-form-control" placeholder="Example: /api/users">
+            </div>
+            <div class="pg-form-group">
+                <small class="pg-note">Note: the <strong>Document Path</strong> defines where the file will be created inside <code>rhyla-docs/body</code> — the last segment becomes the file name (spaces will be converted to <code>_</code>). Missing folders will be created automatically. Do not include extensions such as <code>.md</code> or <code>.html</code> in this field.</small>
             </div>
 
             <div class="pg-form-group">
@@ -125,8 +133,7 @@
             <div class="pg-preview">
                 # Create User
 
-                <span class="http-method pg-post">POST</span> <span class="post-tag post-tag--new">new</span> <span
-                    class="post-tag post-tag--v1">v1</span>
+                POST [new] [v1]
 
                 `/api/users`
 
@@ -201,6 +208,7 @@
         // Elementos do formulário
         const routeTitle = document.getElementById('route-title');
         const routePath = document.getElementById('route-path');
+    const documentPath = document.getElementById('document-path');
         const routeDescription = document.getElementById('route-description');
         const requestBody = document.getElementById('request-body');
         const requestHeaders = document.getElementById('request-headers');
@@ -235,13 +243,15 @@
 
     // Function to generate the cURL command from the form fields
         function generateCurl() {
-            // Verifica se o caminho da rota está preenchido
-            if (!routePath.value) {
+            // Usa Route Path para exibição; se vazio, cai para Document Path
+            const pathForDisplay = routePath.value || documentPath.value;
+            if (!pathForDisplay) {
                 return;
             }
 
             // Inicia o comando cURL com o método e caminho
-            let curl = `curl -X ${selectedMethod} \\\n  https://api.example.com${routePath.value}`;
+            let curl = `curl -X ${selectedMethod} \\
+  https://api.example.com${pathForDisplay}`;
 
             // Adiciona headers se houver
             const headerLines = requestHeaders.value.trim().split('\n');
@@ -269,7 +279,7 @@
                 });
 
                 if (queryString !== '?') {
-                    curl = curl.replace(routePath.value, `${routePath.value}${queryString}`);
+                    curl = curl.replace(pathForDisplay, `${pathForDisplay}${queryString}`);
                 }
             }
 
@@ -290,14 +300,8 @@
                 selectedTags.push(tag.value);
             });
 
-            // Cria as tags HTML
-            const tagsHtml = selectedTags.map(tag => {
-                if (tag === 'new') return '<span class="post-tag post-tag--new">new</span>';
-                if (tag === 'dep') return '<span class="post-tag post-tag--dep">dep</span>';
-                // version tags start with 'v'
-                if (tag.startsWith('v')) return `<span class="post-tag post-tag--v">${tag}</span>`;
-                return `<span class="post-tag">${tag}</span>`;
-            }).join(' ');
+            // Tags como texto simples
+            const tagsText = selectedTags.map(tag => `[${tag}]`).join(' ');
 
             // Build the preview
             let preview = '';
@@ -305,11 +309,11 @@
             // Title
             preview += `# ${routeTitle.value || 'Título da Rota'}\n\n`;
 
-            // HTTP method and tags
-            preview += `<span class="http-method pg-${selectedMethod.toLowerCase()}">${selectedMethod}</span> ${tagsHtml}\n\n`;
+            // HTTP method and tags (sem spans)
+            preview += `${selectedMethod}${tagsText ? ' ' + tagsText : ''}\n\n`;
 
             // Path
-            preview += `\`${routePath.value || '/api/endpoint'}\`\n\n`;
+            preview += `\`${routePath.value || documentPath.value || '/api/endpoint'}\`\n\n`;
 
             // Description
             preview += `${routeDescription.value || 'Descrição da rota...'}\n\n`;
@@ -354,7 +358,7 @@
 
     // Add event listeners for all form fields
         const formFields = [
-            routeTitle, routePath, routeDescription, requestBody,
+            routeTitle, routePath, documentPath, routeDescription, requestBody,
             requestHeaders, queryParams, responseSuccess, responseError
         ];
 
@@ -381,33 +385,13 @@
             // Título
             mdContent += `# ${routeTitle.value || 'Título da Rota'}\n\n`;
             
-            // Método HTTP (mantemos a tag HTML para estilização)
-            mdContent += `<span class="http-method pg-${selectedMethod.toLowerCase()}">${selectedMethod}</span> `;
-            
-            // Tags (keep HTML spans for styling)
-            const selectedTags = [];
-            document.querySelectorAll('input[name="tags"]:checked').forEach(tag => {
-                const value = tag.value;
-                let tagClass = value;
-                
-                // Ajustar classe para versões
-                if (value.startsWith('v')) {
-                    tagClass = 'v';
-                } else if (value === 'dep') {
-                    tagClass = 'dep';
-                }
-                
-                selectedTags.push(`<span class="post-tag post-tag--${tagClass}">${value}</span>`);
-            });
-            
-            if (selectedTags.length > 0) {
-                mdContent += selectedTags.join(' ') + '\n\n';
-            } else {
-                mdContent += '\n\n';
-            }
+            // Método HTTP + tags simples no Markdown
+            const mdTags = [];
+            document.querySelectorAll('input[name="tags"]:checked').forEach(tag => mdTags.push(tag.value));
+            mdContent += `${selectedMethod}${mdTags.length ? ' ' + mdTags.map(t => `[${t}]`).join(' ') : ''}\n\n`;
             
             // Caminho
-            mdContent += `\`${routePath.value || '/api/endpoint'}\`\n\n`;
+            mdContent += `\`${routePath.value || documentPath.value || '/api/endpoint'}\`\n\n`;
             
             // Descrição
             mdContent += `${routeDescription.value || 'Descrição da rota...'}\n\n`;
@@ -451,9 +435,9 @@
 
         // Functionality to generate the page
         document.getElementById('generate-btn').addEventListener('click', function () {
-            // Validate required fields
-            if (!routePath.value) {
-                alert('Please fill the route path before generating the file.');
+            // Validate required fields: need at least one of routePath or documentPath
+            if (!routePath.value && !documentPath.value) {
+                alert('Please fill at least the Route Path or the Document Path before generating the file.');
                 routePath.focus();
                 return;
             }
@@ -464,8 +448,9 @@
                 selectedTags.push(tag.value);
             });
 
-            // Build path using the imported function
-            const filePath = buildFilePath(routePath.value, selectedMethod, selectedTags);
+            // Build path using the imported function (prefer Document Path if provided)
+            const pathForFile = documentPath.value || routePath.value;
+            const filePath = buildFilePath(pathForFile, selectedMethod, selectedTags);
             const content = getPreviewContent();
 
             // Visual feedback

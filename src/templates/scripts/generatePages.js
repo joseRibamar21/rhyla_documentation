@@ -4,8 +4,10 @@
  */
 
 /**
- * Constrói o caminho do arquivo com base no caminho da rota, método HTTP e tags
- * @param {string} routePathValue - O caminho da rota (ex: /api/users)
+ * Constrói o caminho do arquivo com base no Document Path (onde salvar), método HTTP e tags
+ * Importante: este parâmetro representa o caminho de documento usado para gerar o arquivo em rhyla-docs/body.
+ * O "Route Path" visual exibido na documentação/cURL é independente e não influencia este cálculo.
+ * @param {string} routePathValue - Document Path (ex: /api/users)
  * @param {string} selectedMethod - O método HTTP selecionado (ex: GET, POST)
  * @param {string[]} selectedTags - As tags selecionadas (ex: ['new', 'v1'])
  * @returns {string} - O caminho completo do arquivo
