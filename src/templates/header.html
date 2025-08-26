@@ -4,10 +4,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Documentação</title>
+  <title>RhylaDoc</title>
   <!-- CSS fixo: global.css (sempre necessário) + tema padrão light.css -->
   <link rel="stylesheet" href="/styles/global.css">
   <link id="theme-style" rel="stylesheet" href="/styles/light.css">
+  <link rel="stylesheet" href="/styles/page-generator.css">
+  <meta name="rhyla-lang" content="en">
+  <link rel="icon" type="image/x-icon" href="/public/favicon.ico">
   <!-- Script crítico que corrige os caminhos CSS antes da página renderizar completamente -->
   <script>
     (function () {
@@ -52,7 +55,7 @@
   <header class="rhyla-header">
     <div class="rhyla-brand">
       <!-- Logo com caminho absoluto baseado no PREFIX -->
-      <img id="rhyla-logo" src="/public/logo.png" alt="Logo da Documentação" style="height:100px;width:auto;" onload="this.src=this.getAttribute('data-src')||this.src" data-src="">
+      <img id="rhyla-logo" src="/public/logo.png" alt="Logo da Documentação" style="height:100px;width:auto;" >
       <script>
         (function() {
           try {
