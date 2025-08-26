@@ -119,3 +119,66 @@ hr{
   margin: 24px 0;
 }
 
+
+input {
+  border: 1px solid var(--pg-border-color);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--pg-text-color);
+  background: var(--pg-input-bg);
+  transition: border-color 0.2s ease;
+  &:focus {
+    outline: none;
+    border-color: var(--pg-primary-color);
+  }
+}
+
+select {
+  border: 1px solid var(--pg-border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--pg-text-color);
+  background: var(--pg-input-bg);
+  transition: border-color 0.2s ease;
+  &:focus {
+    outline: none;
+    border-color: var(--pg-primary-color);
+  }
+}
+
+textarea {
+  border: 1px solid var(--pg-border-color);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--pg-text-color);
+  background: var(--pg-input-bg);
+  transition: border-color 0.2s ease;
+  &:focus {
+    outline: none;
+    border-color: var(--pg-primary-color);
+  }
+}
+
+button {
+  border: 1px solid var(--pg-border-color);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: #000;
+  background:  var(--pg-primary-color);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  &:focus {
+    outline: none;
+    border-color: var(--pg-primary-color);
+  }
+  &:hover {
+    background: var(--pg-primary-hover);
+  }
+  &:active {
+    background: var(--pg-primary-hover);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+}

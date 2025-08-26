@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Generator Routes - Rhyla</title>
     <link rel="stylesheet" href="/styles/page-generator.css">
+       
 </head>
 
 <body class="page-generator-component">
@@ -70,9 +71,9 @@
             </div>
 
             <div class="pg-form-group">
-                <label for="route-description">Descrição</label>
+                <label for="route-description">Description</label>
                 <textarea id="route-description" class="pg-form-control"
-                    placeholder="Descreva o propósito desta rota..."></textarea>
+                    placeholder="Write route description..."></textarea>
             </div>
         </div>
 
@@ -85,6 +86,26 @@
                         <label for="request-body">Request Body (JSON)</label>
                         <textarea id="request-body" class="pg-form-control" 
                             placeholder='{"name": "string", "email": "string"}'></textarea>
+                        <div class="pg-form-group" style="margin-top:8px; gap:8px; display:flex; flex-wrap:wrap; align-items:center;">
+                            <button type="button" id="parse-body-btn" class="pg-btn-secondary">Parse JSON to Fields</button>
+                            <button type="button" id="add-field-btn" class="pg-btn-secondary">Add Field</button>
+                            <small class="pg-note">Tip: Use dot notation for nested fields (e.g. <code>address.street</code>).</small>
+                        </div>
+                        <div class="pg-table-wrapper" style="overflow:auto;">
+                            <table class="pg-table" id="body-fields-table" style="min-width:640px; width:100%;">
+                                <thead>
+                                    <tr>
+                                        <th style="width:22%">Field</th>
+                                        <th style="width:14%">Type</th>
+                                        <th style="width:12%">Required</th>
+                                        <th style="width:32%">Description</th>
+                                        <th style="width:16%">Example</th>
+                                        <th style="width:4%"></th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
                 <div class="pg-col">
@@ -215,11 +236,148 @@
         const queryParams = document.getElementById('query-params');
         const responseSuccess = document.getElementById('response-success');
         const responseError = document.getElementById('response-error');
-        const curlCommand = document.getElementById('curl-command');
-        const previewElement = document.querySelector('.pg-preview');
+    const curlCommand = document.getElementById('curl-command');
+    const previewElement = document.querySelector('.pg-preview');
+    const parseBodyBtn = document.getElementById('parse-body-btn');
+    const addFieldBtn = document.getElementById('add-field-btn');
+    const bodyFieldsTbody = document.getElementById('body-fields-table')?.querySelector('tbody');
 
     // Variable to store the selected HTTP method
         let selectedMethod = 'GET';
+
+        // ---------------- Request Body Fields Editor ----------------
+        const bodyFields = [];
+        const TYPE_OPTIONS = ['string','number','boolean','object','array','null'];
+
+        function upsertField(name, type = 'string', required = false, description = '', example = '') {
+            name = (name || '').trim();
+            if (!name) return;
+            const idx = bodyFields.findIndex(f => f.name === name);
+            const field = { name, type, required: !!required, description, example };
+            if (idx >= 0) bodyFields[idx] = field; else bodyFields.push(field);
+        }
+
+        function removeField(name) {
+            const i = bodyFields.findIndex(f => f.name === name);
+            if (i >= 0) bodyFields.splice(i,1);
+        }
+
+        function renderFieldsTable() {
+            if (!bodyFieldsTbody) return;
+            bodyFieldsTbody.innerHTML = '';
+            bodyFields.forEach(f => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><input type="text" class="pg-input-name" value="${f.name}"></td>
+                    <td>
+                        <select class="pg-input-type">${TYPE_OPTIONS.map(t => `<option value="${t}" ${t===f.type?'selected':''}>${t}</option>`).join('')}</select>
+                    </td>
+                    <td class="pg-col-required"><input type="checkbox" class="pg-input-required" ${f.required?'checked':''}></td>
+                    <td><textarea class="pg-input-desc" placeholder="Description...">${f.description||''}</textarea></td>
+                    <td><input type="text" class="pg-input-example" placeholder="Example" value="${f.example||''}"></td>
+                    <td><button type="button" class="pg-remove" title="Remove">✕</button></td>
+                `;
+                tr.querySelector('.pg-input-name').addEventListener('input', e => { f.name = e.target.value; syncBodyFromFields(); updatePreview(); });
+                tr.querySelector('.pg-input-type').addEventListener('change', e => { f.type = e.target.value; syncBodyFromFields(); updatePreview(); });
+                tr.querySelector('.pg-input-required').addEventListener('change', e => { f.required = e.target.checked; updatePreview(); });
+                tr.querySelector('.pg-input-desc').addEventListener('input', e => { f.description = e.target.value; });
+                tr.querySelector('.pg-input-example').addEventListener('input', e => { f.example = e.target.value; syncBodyFromFields(); });
+                tr.querySelector('.pg-remove').addEventListener('click', () => { removeField(f.name); renderFieldsTable(); syncBodyFromFields(); updatePreview(); });
+                bodyFieldsTbody.appendChild(tr);
+            });
+        }
+
+        function flattenObject(obj, prefix = '') {
+            const entries = [];
+            Object.keys(obj || {}).forEach(k => {
+                const val = obj[k];
+                const name = prefix ? `${prefix}.${k}` : k;
+                if (val && typeof val === 'object' && !Array.isArray(val)) {
+                    entries.push(...flattenObject(val, name));
+                } else {
+                    entries.push([name, val]);
+                }
+            });
+            return entries;
+        }
+
+        function inferType(v) {
+            if (Array.isArray(v)) return 'array';
+            if (v === null) return 'null';
+            const t = typeof v;
+            if (t === 'string' || t === 'number' || t === 'boolean' || t === 'object') return t;
+            return 'string';
+        }
+
+        function parseJsonToFields() {
+            try {
+                const txt = requestBody.value.trim();
+                if (!txt) return;
+                const json = JSON.parse(txt);
+                const pairs = flattenObject(json);
+                pairs.forEach(([name, value]) => {
+                    upsertField(name, inferType(value), false, '', typeof value === 'object' ? JSON.stringify(value) : String(value));
+                });
+                renderFieldsTable();
+                updatePreview();
+            } catch (e) {
+                alert('Invalid JSON in Request Body.');
+            }
+        }
+
+        function buildJsonFromFields() {
+            const flat = {};
+            bodyFields.forEach(f => {
+                let value;
+                if (f.example) {
+                    try { value = JSON.parse(f.example); } catch { value = f.example; }
+                } else {
+                    if (f.type === 'number') value = 0;
+                    else if (f.type === 'boolean') value = false;
+                    else if (f.type === 'array') value = [];
+                    else if (f.type === 'object') value = {};
+                    else if (f.type === 'null') value = null;
+                    else value = '';
+                }
+                flat[f.name] = value;
+            });
+            const nested = {};
+            Object.entries(flat).forEach(([key, val]) => {
+                const parts = key.split('.');
+                let ref = nested;
+                for (let i = 0; i < parts.length; i++) {
+                    const p = parts[i];
+                    if (i === parts.length - 1) {
+                        ref[p] = val;
+                    } else {
+                        if (!(p in ref) || typeof ref[p] !== 'object' || ref[p] === null) ref[p] = {};
+                        ref = ref[p];
+                    }
+                }
+            });
+            return nested;
+        }
+
+        function syncBodyFromFields() {
+            try {
+                const obj = buildJsonFromFields();
+                requestBody.value = JSON.stringify(obj, null, 2);
+            } catch {}
+        }
+
+        function buildBodyFieldsMarkdown() {
+            if (!bodyFields.length) return '';
+            let md = '### Body Fields\n\n';
+            md += '| Field | Type | Required | Description | Example |\n|---|---|:---:|---|---|\n';
+            bodyFields.forEach(f => {
+                const req = f.required ? 'yes' : 'no';
+                const desc = (f.description || '').replace(/\n/g, ' ');
+                const ex = f.example ? String(f.example).replace(/\n/g, ' ') : '';
+                md += `| ${f.name} | ${f.type} | ${req} | ${desc} | ${ex} |\n`;
+            });
+            md += '\n';
+            return md;
+        }
 
     // Code to select HTTP method
         document.querySelectorAll('.pg-method-btn').forEach(button => {
@@ -335,6 +493,8 @@
             if (requestBody.value.trim()) {
                 preview += `### Body\n\`\`\`json\n${requestBody.value}\n\`\`\`\n\n`;
             }
+            const bodyFieldsMd = buildBodyFieldsMarkdown();
+            if (bodyFieldsMd) preview += bodyFieldsMd;
 
             // Response
             preview += `## Response\n\n`;
@@ -377,6 +537,14 @@
         // Permite editar diretamente o comando cURL
         curlCommand.addEventListener('input', updatePreview);
 
+        // Botões do editor de campos do Body
+        if (parseBodyBtn) parseBodyBtn.addEventListener('click', parseJsonToFields);
+        if (addFieldBtn) addFieldBtn.addEventListener('click', () => {
+            upsertField('field', 'string', false, '', '');
+            renderFieldsTable();
+            updatePreview();
+        });
+
         // Função para obter o conteúdo do preview como markdown formatado
         function getPreviewContent() {
             // Vamos construir o conteúdo markdown manualmente a partir dos campos do formulário
@@ -413,6 +581,8 @@
             if (requestBody.value.trim()) {
                 mdContent += `### Body\n\`\`\`json\n${requestBody.value}\n\`\`\`\n\n`;
             }
+            const bodyFieldsMd2 = buildBodyFieldsMarkdown();
+            if (bodyFieldsMd2) mdContent += bodyFieldsMd2;
             
             // Response
             mdContent += `## Response\n\n`;
