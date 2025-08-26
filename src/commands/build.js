@@ -374,15 +374,11 @@ export default function build() {
       const itemRel = path.join(relPath, item.name);
       const itemRelPosix = toPosix(itemRel);
 
-      console.log('itemPath:', itemPath);
-
       if (item.isDirectory()) {
         // Respeita a lista de ignorados (nomes/paths/padrões)
         if (shouldIgnore(item.name, itemRelPosix)) {
-          console.log('Skipping directory (ignored):', itemRelPosix);
           continue;
         }
-        console.log('Processing directory:', itemRelPosix);
         processDir(itemPath, itemRel);
         continue;
       }
