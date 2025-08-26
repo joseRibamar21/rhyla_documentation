@@ -83,6 +83,10 @@ export default function init() {
 
   fs.copyFileSync(path.join(templatesPath, 'tag-new.html'), path.join(rhylaPath, 'body', 'tag-new.html'));
 
+  fs.cpSync(path.join(templatesPath, 'kit_dev_rhyla'), path.join(rhylaPath, 'body', 'kit_dev_rhyla'), { recursive: true });
+
+  fs.copyFileSync(path.join(templatesPath, 'page_generator.md'), path.join(rhylaPath, 'body', 'page_generator.md'));
+
 
   // Copiar public (inclui logo.png se existir)
   const publicTpl = path.join(templatesPath, 'public');
