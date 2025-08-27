@@ -1,6 +1,7 @@
 {
   "title": "Documentation Standard",
   "description": "Generated with Rhyla",
+  "site_url": "https://rhyladoc.com/",
   "side_topics": true,
   "allow_raw_html": false,
   "base": "/",

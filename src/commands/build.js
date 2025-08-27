@@ -72,6 +72,7 @@ export default function build() {
   const cfgSrc = path.join(rhylaPath, 'config.json');
   const cfgDst = path.join(distPath, 'config.json');
   let basePath = '/';
+  let siteUrl = null; // URL pública do site, ex: https://docs.example.com
   // Lista de ignorados configurável
   /** @type {string[]} */
   let buildIgnore = [];
@@ -81,6 +82,9 @@ export default function build() {
       const cfgObj = JSON.parse(fs.readFileSync(cfgSrc, 'utf8'));
       if (cfgObj && typeof cfgObj.base === 'string' && cfgObj.base.trim()) {
         basePath = cfgObj.base.trim();
+      }
+      if (cfgObj && typeof cfgObj.site_url === 'string' && cfgObj.site_url.trim()) {
+        siteUrl = cfgObj.site_url.trim();
       }
       // Lê lista de arquivos/pastas a ignorar durante o build
       if (cfgObj && Array.isArray(cfgObj.build_ignore)) {
@@ -127,6 +131,15 @@ export default function build() {
       header = header.replace(/(<meta[^>]+name=["']viewport["'][^>]*>)/i, `$1${metaTag}`);
     } else if (/<head[^>]*>/i.test(header)) {
       header = header.replace(/<head[^>]*>/i, (m) => m + metaTag);
+    }
+  }
+  // Garante uma meta robots padrão caso o usuário não tenha incluído (index,follow)
+  if (!/meta\s+name=["']robots["']/i.test(header)) {
+    const robotsMeta = `\n  <meta name="robots" content="index,follow">\n`;
+    if (/<meta[^>]+name=["']viewport["'][^>]*>/i.test(header)) {
+      header = header.replace(/(<meta[^>]+name=["']viewport["'][^>]*>)/i, `$1${robotsMeta}`);
+    } else if (/<head[^>]*>/i.test(header)) {
+      header = header.replace(/<head[^>]*>/i, (m) => m + robotsMeta);
     }
   }
   const notFoundTemplatePath = path.join(rhylaPath, 'body', 'notFound.html');
@@ -316,6 +329,35 @@ export default function build() {
 
   const headerInline = withInlineHeaderRuntime(header);
 
+  // Util para injetar canonical/meta por página
+  function injectCanonical(html, canonicalUrl) {
+    try {
+      let out = html;
+      if (canonicalUrl && !/rel=["']canonical["']/i.test(out)) {
+        out = out.replace(/<\/head>/i, `  <link rel="canonical" href="${canonicalUrl}" />\n</head>`);
+      }
+      if (!/meta\s+name=["']robots["']/i.test(out)) {
+        out = out.replace(/<\/head>/i, `  <meta name="robots" content="index,follow" />\n</head>`);
+      }
+      return out;
+    } catch { return html; }
+  }
+
+  // Normaliza siteUrl/base para montar URLs absolutas
+  function getBaseUrl() {
+    if (!siteUrl) return null;
+    let s = siteUrl.replace(/\/$/, '');
+    let b = basePath;
+    if (!b.startsWith('/')) b = '/' + b;
+    if (!b.endsWith('/')) b += '/';
+    return s + b; // ex.: https://docs.ex.com + /docs/ → https://docs.ex.com/docs/
+  }
+  const absoluteBaseUrl = getBaseUrl();
+
+  // Coleta das páginas geradas para sitemap
+  /** @type {Set<string>} */
+  const generatedRelPaths = new Set(); // caminhos relativos com .html (ex: "guide/intro.html")
+
   // Função para reescrever URLs para considerar o basePath
   function rewriteForBase(html, base) {
     if (!base || base === '/') return html;
@@ -348,8 +390,11 @@ export default function build() {
       ? md.render(fs.readFileSync(homeMdPath, 'utf8'))
       : fs.readFileSync(homeHtmlPath, 'utf8');
   const sidebar = generateSidebarHTML(bodyPath, null, 'home', { ignore: ignorePatterns });
-    const pageHTML = rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`, basePath);
+    let pageHTML = rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`, basePath);
+    const canonicalRoot = absoluteBaseUrl ? absoluteBaseUrl : null;
+    pageHTML = injectCanonical(pageHTML, canonicalRoot);
     fs.writeFileSync(path.join(distPath, 'index.html'), pageHTML);
+    generatedRelPaths.add('index.html');
     // Alias home.html na raiz
     fs.writeFileSync(path.join(distPath, 'home.html'), pageHTML);
     // Alias /home/index.html para URLs limpas
@@ -360,8 +405,12 @@ export default function build() {
   const sidebar = generateSidebarHTML(bodyPath, null, null, { ignore: ignorePatterns });
     fs.writeFileSync(
       path.join(distPath, 'index.html'),
-      rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${notFoundHTML}</main>`, basePath)
+      injectCanonical(
+        rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${notFoundHTML}</main>`, basePath),
+        absoluteBaseUrl || null
+      )
     );
+    generatedRelPaths.add('index.html');
   }
 
 
@@ -410,14 +459,19 @@ export default function build() {
       const outDir = path.join(distPath, relPath);
       fs.mkdirSync(outDir, { recursive: true });
 
-      const pageHTML = rewriteForBase(headerInline + sidebar + `<main class="rhyla-main">${content}</main>`, basePath);
+  let pageHTML = rewriteForBase(headerInline + sidebar + `<main class="rhyla-main">${content}</main>`, basePath);
+  // caminho relativo posix para canonical
+  const relPosix = toPosix(path.join(relPath, `${topic}.html`)).replace(/^\//, '');
+  const canonical = absoluteBaseUrl ? absoluteBaseUrl + relPosix : null;
+  pageHTML = injectCanonical(pageHTML, canonical);
 
-      fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
+  fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
+  generatedRelPaths.add(relPosix);
 
       if (!relPath) {
         const cleanDir = path.join(distPath, topic);
         fs.mkdirSync(cleanDir, { recursive: true });
-        fs.writeFileSync(path.join(cleanDir, 'index.html'), pageHTML);
+  fs.writeFileSync(path.join(cleanDir, 'index.html'), pageHTML);
       }
     }
   }
@@ -432,4 +486,26 @@ export default function build() {
   );
 
   console.log('✅ Build completed successfully.');
+
+  // Gerar sitemap.xml e robots.txt se siteUrl estiver definido
+  if (absoluteBaseUrl) {
+    try {
+      const urls = Array.from(generatedRelPaths).sort();
+      const today = new Date().toISOString().split('T')[0];
+      const sitemapEntries = urls.map((rel) => {
+        const loc = absoluteBaseUrl + rel.replace(/^\//, '');
+        return `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${rel === 'index.html' ? '1.0' : '0.5'}</priority>\n  </url>`;
+      }).join('\n');
+      const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemapEntries}\n</urlset>\n`;
+      fs.writeFileSync(path.join(distPath, 'sitemap.xml'), sitemap, 'utf8');
+
+      const robots = `User-agent: *\nAllow: /\n\nSitemap: ${absoluteBaseUrl}sitemap.xml\n`;
+      fs.writeFileSync(path.join(distPath, 'robots.txt'), robots, 'utf8');
+      console.log('🗺️  sitemap.xml e robots.txt gerados.');
+    } catch (e) {
+      console.warn('⚠️  Faileld to generate sitemap/robots:', e?.message || e);
+    }
+  } else {
+    console.warn('ℹ️  site_url missing in rhyla-docs/config.json. Set "site_url" to generate sitemap.xml, robots.txt, and absolute canonicals.');
+  }
 }
