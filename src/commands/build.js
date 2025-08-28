@@ -465,13 +465,31 @@ export default function build() {
   const canonical = absoluteBaseUrl ? absoluteBaseUrl + relPosix : null;
   pageHTML = injectCanonical(pageHTML, canonical);
 
-  fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
-  generatedRelPaths.add(relPosix);
+  // Verificar se já existe uma pasta com o mesmo nome do arquivo que está sendo gerado
+  const topicDir = path.join(outDir, topic);
+  const topicDirExists = fs.existsSync(topicDir) && fs.statSync(topicDir).isDirectory();
+  
+  // Gerar o arquivo .html apenas se não existir uma pasta com o mesmo nome
+  if (!topicDirExists) {
+    fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
+    generatedRelPaths.add(relPosix);
+  }
 
       if (!relPath) {
-        const cleanDir = path.join(distPath, topic);
-        fs.mkdirSync(cleanDir, { recursive: true });
-  fs.writeFileSync(path.join(cleanDir, 'index.html'), pageHTML);
+        // Para arquivos na raiz, criar também a versão em pasta/index.html (URLs limpas)
+        // Evitar duplicação: se já existir um arquivo com o mesmo nome, não criar a versão pasta/index.html
+        const topicFile = path.join(distPath, `${topic}.html`);
+        const topicFileExists = fs.existsSync(topicFile);
+        
+        if (!topicFileExists) {
+          const cleanDir = path.join(distPath, topic);
+          fs.mkdirSync(cleanDir, { recursive: true });
+          fs.writeFileSync(path.join(cleanDir, 'index.html'), pageHTML);
+          // Registrar apenas uma vez no sitemap
+          if (!generatedRelPaths.has(relPosix)) {
+            generatedRelPaths.add(toPosix(path.join(topic, 'index.html')));
+          }
+        }
       }
     }
   }
