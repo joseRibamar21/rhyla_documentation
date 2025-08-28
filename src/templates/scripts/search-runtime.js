@@ -28,6 +28,273 @@
     }
     
     function init() {
+        // Verifica e aplica o tema atual do localStorage
+        function applyTheme() {
+            const currentTheme = localStorage.getItem('rhyla-theme') || 'light';
+            document.documentElement.setAttribute('data-theme', currentTheme);
+        }
+        
+        // Aplica o tema imediatamente
+        applyTheme();
+        
+        // Observa mudanças no localStorage para atualizar o tema
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'rhyla-theme') {
+                applyTheme();
+            }
+        });
+        
+        // Adiciona estilos CSS para melhorar a visualização dos resultados
+        const styleEl = document.createElement('style');
+        styleEl.textContent = `
+            /* Melhorias no painel de busca */
+            .rh-search-panel {
+                border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            }
+            
+            /* Estilo personalizado para o botão de fechar */
+            #search-close {
+                background: transparent;
+                border: none;
+                border-radius: 50%;
+                color: var(--rh-muted, #6b7280);
+                font-size: 18px;
+                width: 30px;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+                padding: 0;
+                cursor: pointer;
+            }
+            
+            #search-close:hover {
+                background-color: rgba(0, 0, 0, 0.08);
+                color: var(--rh-accent, #0066cc);
+            }
+            
+            html[data-theme="dark"] #search-close:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+                color: var(--rh-accent, #60a5fa);
+            }
+            
+            .rh-search-input-wrap {
+                border-bottom: 2px solid var(--rh-search-border-color, rgba(0, 0, 0, 0.1));
+                padding: 16px 20px;
+            }
+            
+            .rh-search-input-wrap input {
+                font-size: 1.1em;
+                padding: 8px 12px;
+                transition: all 0.2s ease;
+                border: none;
+                background: transparent;
+            }
+            
+            .rh-search-input-wrap input:focus {
+                outline: none;
+                box-shadow: none;
+            }
+            
+            /* Melhorando a aparência do contador de resultados */
+            .rh-search-meta {
+                padding: 12px 20px;
+                font-size: 0.9em;
+                opacity: 0.7;
+                border-bottom: 1px solid var(--rh-search-border-color, rgba(0, 0, 0, 0.1));
+                font-style: italic;
+                letter-spacing: 0.2px;
+            }
+            
+            .rh-search-results {
+                padding: 12px 20px;
+                max-height: 50vh;
+                overflow-y: auto;
+                scrollbar-width: thin;
+            }
+            
+            /* Estiliza o painel de busca com base nas variáveis de tema */
+            .rh-search-panel {
+                background-color: var(--rh-search-panel-bg, #ffffff);
+                overflow: hidden; /* Garante que os cantos arredondados funcionem corretamente */
+            }
+            
+            .rh-search-results .result {
+                padding: 12px;
+                margin-bottom: 14px;
+                border-radius: 8px;
+                background-color: var(--rh-search-result-bg, rgba(0, 0, 0, 0.05));
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+            }
+            
+            .rh-search-results .result:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            }
+            
+            .rh-search-results .result-title {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-weight: 600;
+                font-size: 1.1em;
+                margin-bottom: 8px;
+                padding-bottom: 6px;
+                color: var(--rh-search-title-color, inherit);
+                border-bottom: 1px solid var(--rh-search-border-color, rgba(0, 0, 0, 0.1));
+                text-decoration: none;
+                position: relative;
+            }
+            
+            .rh-search-results .result-title span {
+                flex: 1;
+            }
+            
+            .rh-search-results .result-title .result-arrow {
+                font-size: 18px;
+                opacity: 0;
+                transform: translateX(-10px);
+                transition: all 0.2s ease;
+            }
+            
+            .rh-search-results .result:hover .result-title .result-arrow {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            
+            .rh-search-results .result-title:hover {
+                color: var(--rh-search-title-hover, #0066cc);
+            }
+            
+            .rh-search-results .snippet {
+                font-size: 0.95em;
+                opacity: 0.85;
+                line-height: 1.4;
+            }
+            
+            .rh-search-results .snippet mark {
+                background-color: var(--rh-search-highlight-bg, rgba(255, 240, 0, 0.4));
+                padding: 0 2px;
+                border-radius: 2px;
+            }
+            
+            .rh-search-results .no-results {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 40px 20px;
+                text-align: center;
+                opacity: 0.7;
+            }
+            
+            .rh-search-results .no-results svg {
+                margin-bottom: 16px;
+                opacity: 0.6;
+            }
+            
+            .rh-search-results .no-results p {
+                font-size: 0.95em;
+                line-height: 1.5;
+            }
+            
+            /* Animações de entrada para os resultados */
+            .rh-search-results .result {
+                animation: fadeSlideIn 0.3s ease forwards;
+                opacity: 0;
+                transform: translateY(10px);
+                animation-delay: var(--delay, 0s);
+            }
+            
+            @keyframes fadeSlideIn {
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+            
+            /* Estilização dos scrollbars para os resultados */
+            .rh-search-results::-webkit-scrollbar {
+                width: 6px;
+                background: var(--rh-search-scrollbar-bg, rgba(0, 0, 0, 0.05));
+            }
+            
+            .rh-search-results::-webkit-scrollbar-thumb {
+                background: var(--rh-search-scrollbar-thumb, rgba(0, 0, 0, 0.2));
+                border-radius: 3px;
+            }
+            
+            .rh-search-results::-webkit-scrollbar-thumb:hover {
+                background: var(--rh-search-scrollbar-thumb-hover, rgba(0, 0, 0, 0.3));
+            }
+            
+            /* Quando o tema escuro é ativado através de localStorage */
+            html[data-theme="dark"] .rh-search-results .result {
+                background-color: var(--rh-search-result-bg-dark, rgba(255, 255, 255, 0.08));
+            }
+            
+            html[data-theme="dark"] .rh-search-results .result-title {
+                border-bottom-color: var(--rh-search-border-color-dark, rgba(255, 255, 255, 0.1));
+            }
+            
+            html[data-theme="dark"] .rh-search-results .result-title:hover {
+                color: var(--rh-search-title-hover-dark, #66b0ff);
+            }
+            
+            html[data-theme="dark"] .rh-search-results .snippet mark {
+                background-color: var(--rh-search-highlight-bg-dark, rgba(255, 220, 0, 0.3));
+                color: var(--rh-search-highlight-text-dark, inherit);
+            }
+            
+            html[data-theme="dark"] .rh-search-results::-webkit-scrollbar {
+                background: rgba(255, 255, 255, 0.05);
+            }
+            
+            html[data-theme="dark"] .rh-search-results::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.15);
+            }
+            
+            html[data-theme="dark"] .rh-search-results::-webkit-scrollbar-thumb:hover {
+                background: rgba(255, 255, 255, 0.25);
+            }
+            
+            /* Mantenha a compatibilidade com prefers-color-scheme para usuários sem JavaScript */
+            @media (prefers-color-scheme: dark) {
+                .rh-search-results .result {
+                    background-color: var(--rh-search-result-bg-dark, rgba(255, 255, 255, 0.08));
+                }
+                
+                .rh-search-results .result-title {
+                    border-bottom-color: var(--rh-search-border-color-dark, rgba(255, 255, 255, 0.1));
+                }
+                
+                .rh-search-results .result-title:hover {
+                    color: var(--rh-search-title-hover-dark, #66b0ff);
+                }
+                
+                .rh-search-results .snippet mark {
+                    background-color: var(--rh-search-highlight-bg-dark, rgba(255, 220, 0, 0.3));
+                    color: var(--rh-search-highlight-text-dark, inherit);
+                }
+                
+                .rh-search-results::-webkit-scrollbar {
+                    background: rgba(255, 255, 255, 0.05);
+                }
+                
+                .rh-search-results::-webkit-scrollbar-thumb {
+                    background: rgba(255, 255, 255, 0.15);
+                }
+                
+                .rh-search-results::-webkit-scrollbar-thumb:hover {
+                    background: rgba(255, 255, 255, 0.25);
+                }
+            }
+        `;
+        document.head.appendChild(styleEl);
+        
         let index = [];
         const resultsDiv = document.getElementById('search-results'); // Corrigindo para o ID correto
         const searchBox = document.getElementById('search-input');    // Corrigindo para o ID correto
@@ -203,7 +470,23 @@
         function displayResults(results) {
             if (!resultsDiv) return;
             resultsDiv.innerHTML = '';
-            if (!results.length) { if (meta) meta.textContent = 'Nenhum resultado encontrado'; return; }
+            if (!results.length) { 
+                if (meta) meta.textContent = 'Nenhum resultado encontrado'; 
+                
+                // Mostra uma mensagem visualmente melhor quando não há resultados
+                const noResults = document.createElement('div');
+                noResults.className = 'no-results';
+                noResults.innerHTML = `
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        <line x1="8" y1="11" x2="14" y2="11" stroke-width="1.5"></line>
+                    </svg>
+                    <p>No results found.<br>Try different search terms.</p>
+                `;
+                resultsDiv.appendChild(noResults);
+                return; 
+            }
             if (meta) meta.textContent = `${results.length} resultado(s)`;
             
             // Função para normalizar caminhos e evitar duplicações
@@ -278,10 +561,17 @@
                 // Normaliza a URL final para evitar duplicações de caminhos
                 const finalUrl = normalizeUrl(routeHref);
                 
-                // Cria elementos do resultado
+                // Cria elementos do resultado com design melhorado
                 const a = document.createElement('a');
                 a.href = finalUrl;
-                a.textContent = r.label;
+                a.className = 'result-title';
+                a.innerHTML = '<span>' + r.label + '</span>';
+                
+                // Cria um indicador visual para mostrar que o item é clicável
+                const arrow = document.createElement('div');
+                arrow.className = 'result-arrow';
+                arrow.innerHTML = '→';
+                a.appendChild(arrow);
                 
                 const snippet = document.createElement('div');
                 snippet.className = 'snippet';

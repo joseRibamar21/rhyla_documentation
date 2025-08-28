@@ -9,6 +9,18 @@
   --rh-muted: #6b7280;
   --rh-table-border: #e5e7eb;
   
+  /* Search Variables */
+  --rh-search-panel-bg: #ffffff;
+  --rh-search-result-bg: rgba(0, 0, 0, 0.04);
+  --rh-search-border-color: rgba(0, 0, 0, 0.1);
+  --rh-search-title-color: #0f172a;
+  --rh-search-title-hover: #0066cc;
+  --rh-search-highlight-bg: rgba(255, 240, 0, 0.4);
+  --rh-search-focus-ring: rgba(0, 102, 204, 0.2);
+  --rh-search-scrollbar-bg: rgba(0, 0, 0, 0.05);
+  --rh-search-scrollbar-thumb: rgba(0, 0, 0, 0.2);
+  --rh-search-scrollbar-thumb-hover: rgba(0, 0, 0, 0.3);
+  
   /* Page Generator Variables */
   --pg-border-color: #e2e8f0;
   --pg-input-bg: #ffffff;
