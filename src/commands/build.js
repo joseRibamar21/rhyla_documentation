@@ -51,22 +51,9 @@ export default function build() {
     fs.mkdirSync(scriptsDst, { recursive: true });
     fs.cpSync(scriptsSrc, scriptsDst, { recursive: true });
   }
-
-  // Gerar índice de busca
-  if (fs.existsSync(searchScript)) {
-    console.log('🔍 Gerando índice de busca...');
-    const res = spawnSync(process.execPath, [searchScript], { cwd: rhylaPath, stdio: 'inherit' });
-    if (res.status !== 0) {
-      console.warn('⚠️ Fail to generate search index. Continuing build without index.');
-    }
-  }
-
-  // Copiar o JSON do índice também para a raiz do dist (compat)
-  const searchJsonSrc = path.join(scriptsSrc, 'search_index.json');
-  const searchJsonDst = path.join(distPath, 'search_index.json');
-  if (fs.existsSync(searchJsonSrc)) {
-    fs.copyFileSync(searchJsonSrc, searchJsonDst);
-  }
+  
+  // Moveremos a geração do índice de busca para depois do processamento de arquivos
+  // e aplicação de regras de exclusão
 
   // Copiar config.json para dist e ler basePath se definido
   const cfgSrc = path.join(rhylaPath, 'config.json');
@@ -502,6 +489,157 @@ export default function build() {
     path.join(distPath, '404.html'),
     rewriteForBase(headerInline + sidebar404 + `<main class="rhyla-main">${notFoundHTML}</main>`, basePath)
   );
+
+  // Função para gerar o índice de busca depois do processamento do site
+  function generateSearchIndex() {
+    console.log('🔍 Gerando índice de busca...');
+    
+      // Função auxiliar para percorrer o dist processado (em vez de percorrer o body original)
+    function walkDist(dir, basePath = '') {
+      const entries = [];
+      const items = fs.readdirSync(dir, { withFileTypes: true });
+      
+      for (const item of items) {
+        const fullPath = path.join(dir, item.name);
+        const relativePath = path.join(basePath, item.name);
+        
+        if (item.isDirectory()) {
+          // Ignora diretórios especiais
+          if (['scripts', 'styles', 'public'].includes(item.name)) continue;
+          // Ignora a pasta /home/ que é um alias para a raiz
+          if (item.name === 'home' && !basePath) continue;
+          entries.push(...walkDist(fullPath, relativePath));
+        } else if (item.name.endsWith('.html') && !['404.html', 'search.html', 'robots.txt', 'sitemap.xml'].includes(item.name)) {
+          // Ignora home.html na raiz, pois já temos index.html (são o mesmo conteúdo)
+          if (item.name === 'home.html' && !basePath) continue;
+          
+          // Só indexa arquivos HTML gerados (exceto 404, busca e outros arquivos especiais)
+          entries.push({
+            filePath: fullPath,
+            route: '/' + relativePath.replace(/\\/g, '/').replace(/\.html$/, '')
+          });
+        }
+      }
+      return entries;
+    }    // Strip tags HTML
+    function stripHtml(html) {
+      return html
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;|&amp;|&lt;|&gt;|&quot;|&#39;/g, ' ');
+    }
+    
+    // Extrai título do HTML processado
+    function extractTitle(html) {
+      // Primeiro tenta encontrar o H1 dentro da tag main (conteúdo principal)
+      const mainContent = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+      if (mainContent) {
+        const h1InMain = mainContent[1].match(/<h1[^>]*>(.*?)<\/h1>/i);
+        if (h1InMain) return stripHtml(h1InMain[1]).trim();
+      }
+      
+      // Se não encontrar no conteúdo principal, procura h1 em qualquer lugar
+      const h1 = html.match(/<h1[^>]*>(.*?)<\/h1>/i);
+      if (h1) return stripHtml(h1[1]).trim();
+      
+      // Por último, tenta a tag title
+      const title = html.match(/<title[^>]*>(.*?)<\/title>/i);
+      if (title) {
+        // Remove sufixo padrão tipo "- Nome do Site" ou "| Nome do Site"
+        const titleText = stripHtml(title[1]).trim();
+        return titleText.replace(/\s*[|\-–—]\s*.*$/, '').trim();
+      }
+      
+      return null;
+    }
+    
+    try {
+      // Obtém todos os arquivos HTML no dist (já processados)
+      const htmlFiles = walkDist(distPath);
+      
+      const entries = htmlFiles.map(({ filePath, route }) => {
+        const content = fs.readFileSync(filePath, 'utf8');
+        
+        // Busca conteúdo principal para extrair título e texto
+        const mainContent = content.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+        
+        // Extrair título com prioridade para H1 no conteúdo
+        let title = null;
+        
+        // 1. Primeiro tenta encontrar H1 dentro do conteúdo principal
+        if (mainContent) {
+          const h1Match = mainContent[1].match(/<h1[^>]*>(.*?)<\/h1>/i);
+          if (h1Match) {
+            title = stripHtml(h1Match[1]).trim();
+          } else {
+            // 2. Se não há H1 no conteúdo, tenta encontrar qualquer cabeçalho
+            const headingMatch = mainContent[1].match(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/i);
+            if (headingMatch) title = stripHtml(headingMatch[1]).trim();
+          }
+        }
+        
+        // 3. Se ainda não tem título, procura H1 em qualquer lugar do documento
+        if (!title) {
+          const h1Match = content.match(/<h1[^>]*>(.*?)<\/h1>/i);
+          if (h1Match) title = stripHtml(h1Match[1]).trim();
+        }
+        
+        // 4. Último recurso: usar o nome do arquivo sem extensão
+        if (!title || title === "RhylaDoc") {
+          // Remove extensão e converte hífens para espaços
+          title = path.basename(filePath, '.html')
+                   .replace(/-/g, ' ')
+                   .replace(/\b\w/g, c => c.toUpperCase()); // Capitaliza primeira letra de cada palavra
+        }
+        
+        // Extrai o conteúdo textual para busca
+        const textContent = mainContent 
+          ? stripHtml(mainContent[1])
+          : stripHtml(content);
+          
+        // Normaliza a rota (home deve ser /)
+        const normalizedRoute = route === '/home' ? '/' : route;
+        // Normaliza a rota para index.html dentro de diretórios (tornam-se o diretório apenas)
+        const normalizedNoIndex = normalizedRoute.endsWith('/index') 
+          ? normalizedRoute.substring(0, normalizedRoute.length - 6) // remover o "/index"
+          : normalizedRoute;
+        
+        // Garante que a rota vazia ou raiz seja sempre "/" (não vazia)
+        const finalRoute = normalizedNoIndex === '' ? '/' : normalizedNoIndex;
+        
+        return {
+          route: finalRoute,
+          title: title,
+          content: textContent.replace(/\s+/g, ' ').trim()
+        };
+      });
+      
+      // Escreve o índice de busca em JSON
+      const searchJsonDst = path.join(distPath, 'search_index.json');
+      fs.writeFileSync(searchJsonDst, JSON.stringify(entries, null, 2), 'utf8');
+      
+      // Copia para a pasta scripts também
+      const scriptsDst = path.join(distPath, 'scripts');
+      fs.writeFileSync(path.join(scriptsDst, 'search_index.json'), JSON.stringify(entries, null, 2), 'utf8');
+      
+      // Gera a versão JS do índice
+      fs.writeFileSync(
+        path.join(scriptsDst, 'search_index.js'), 
+        `window.__SEARCH_INDEX__ = ${JSON.stringify(entries)};`, 
+        'utf8'
+      );
+      
+      console.log(`Índice de busca gerado: ${entries.length} entradas`);
+      return true;
+    } catch (error) {
+      console.error('Erro ao gerar índice de busca:', error);
+      return false;
+    }
+  }
+  
+  // Agora gera o índice de busca após todo o processamento
+  generateSearchIndex();
 
   console.log('✅ Build completed successfully.');
 
