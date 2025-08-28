@@ -1,6 +1,6 @@
 {
   "name": "rhyla",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Simple, template-driven Markdown documentation generator (CLI)",
   "bin": {
     "rhyla": "./bin/cli.js"
@@ -15,7 +15,7 @@
   "bugs": {
     "url": "https://github.com/joseRibamar21/rhyla_documentation/issues"
   },
-  "homepage": "https://github.com/joseRibamar21/rhyla_documentation#readme",
+  "homepage": "https://rhyladoc.com/",
   "keywords": [
     "docs",
     "documentation",

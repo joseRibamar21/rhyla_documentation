@@ -9,12 +9,31 @@
   --rh-muted: #6b7280;
   --rh-table-border: #e5e7eb;
   
+  /* Search Variables */
+  --rh-search-panel-bg: #ffffff;
+  --rh-search-result-bg: rgba(0, 0, 0, 0.04);
+  --rh-search-border-color: rgba(0, 0, 0, 0.1);
+  --rh-search-title-color: #0f172a;
+  --rh-search-title-hover: #0066cc;
+  --rh-search-highlight-bg: rgba(255, 240, 0, 0.4);
+  --rh-search-focus-ring: rgba(0, 102, 204, 0.2);
+  --rh-search-scrollbar-bg: rgba(0, 0, 0, 0.05);
+  --rh-search-scrollbar-thumb: rgba(0, 0, 0, 0.2);
+  --rh-search-scrollbar-thumb-hover: rgba(0, 0, 0, 0.3);
+  
   /* Page Generator Variables */
   --pg-border-color: #e2e8f0;
   --pg-input-bg: #ffffff;
   --pg-text-color: #1e293b;
+  --pg-muted-color: #64748b;
   --pg-primary-color: #0066ff;
   --pg-primary-hover: #0055d4;
+  --pg-primary-color-alpha: rgba(0, 102, 255, 0.15);
+  --pg-primary-color-light: rgba(0, 102, 255, 0.3);
+  --pg-primary-color-ultra-light: rgba(0, 102, 255, 0.05);
+  --pg-secondary-bg: #f1f5f9;
+  --pg-secondary-text: #334155;
+  --pg-secondary-hover: #e2e8f0;
   --pg-code-bg: #f8fafc;
   --pg-method-text: #ffffff;
   --pg-get-bg: #61affe;
@@ -22,6 +41,11 @@
   --pg-put-bg: #fca130;
   --pg-delete-bg: #f93e3e;
   --pg-patch-bg: #50e3c2;
+  --pg-tag-hover: #f1f5f9;
+  --pg-danger-color: #e11d48;
+  --pg-danger-bg-light: rgba(225, 29, 72, 0.1);
+  --pg-table-header-bg: #f8fafc;
+  --pg-table-hover-bg: #f1f5f9;
 }
 
 /* Tags HTTP */
