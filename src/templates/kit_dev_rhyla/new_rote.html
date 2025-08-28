@@ -7,6 +7,31 @@
     <title>API Page Generator - Rhyla</title>
     <link rel="stylesheet" href="/styles/page-generator.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        // Script para garantir que a página seja inicializada corretamente,
+        // mesmo quando navegada a partir de outra página interna
+        (function() {
+            // Força reinicialização ao navegar para esta página
+            window.pageGeneratorInitialized = false;
+            
+            // Função para disparar um evento personalizado quando a página é acessada
+            function notifyPageAccess() {
+                console.log("Page Generator: Page accessed, triggering initialization");
+                window.dispatchEvent(new CustomEvent('pageGeneratorNavigated'));
+            }
+            
+            // Executa quando a página é carregada
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                notifyPageAccess();
+            } else {
+                window.addEventListener('load', notifyPageAccess);
+            }
+            
+            // Registra o timestamp para depuração
+            window.pageGeneratorAccessTime = new Date().getTime();
+        })();
+    </script>
 </head>
 
 <body class="page-generator-component">
@@ -313,22 +338,80 @@
         
         // Função para garantir a inicialização correta
         function ensureInitialization() {
-            console.log('DOM fully loaded, initializing page generator script');
+            console.log('Initializing page generator script');
+            // Limpa handlers anteriores para evitar duplicação
+            window.removeEventListener('load', ensureInitialization);
+            document.removeEventListener('DOMContentLoaded', ensureInitialization);
+            
+            // Verifica se o script já foi inicializado para evitar duplicação
+            if (window.pageGeneratorInitialized) {
+                console.log('Page generator already initialized, skipping');
+                return;
+            }
+            
+            // Marca o script como inicializado
+            window.pageGeneratorInitialized = true;
+            
+            // Inicia o gerador de página
             initPageGenerator();
         }
         
-        // Se o DOM já estiver carregado, inicie imediatamente
+        // Estratégia de inicialização múltipla para capturar qualquer cenário:
+        
+        // 1. Se o DOM já estiver carregado, inicie imediatamente
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             console.log('Document already ready, initializing immediately');
-            setTimeout(ensureInitialization, 1); // Pequeno atraso para garantir que o script module seja processado
+            setTimeout(ensureInitialization, 10); // Pequeno atraso para garantir que o script module seja processado
+        } 
+        
+        // 2. Escuta o evento DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', ensureInitialization);
+        
+        // 3. Escuta o evento load da janela como fallback
+        window.addEventListener('load', ensureInitialization);
+        
+        // 4. Escuta o evento personalizado de navegação para a página
+        window.addEventListener('pageGeneratorNavigated', ensureInitialization);
+        
+        // 5. MutationObserver para detectar alterações no DOM (útil para SPAs)
+        const observer = new MutationObserver((mutations) => {
+            if (document.getElementById('route-title') && !window.pageGeneratorInitialized) {
+                console.log('DOM mutation detected with form elements present');
+                ensureInitialization();
+            }
+        });
+        
+        // Inicia a observação em todo o body quando disponível
+        if (document.body) {
+            observer.observe(document.body, { childList: true, subtree: true });
         } else {
-            // Caso contrário, aguarde o evento DOMContentLoaded
-            document.addEventListener('DOMContentLoaded', ensureInitialization);
+            document.addEventListener('DOMContentLoaded', () => {
+                observer.observe(document.body, { childList: true, subtree: true });
+            });
         }
         
         // Função de inicialização principal
         function initPageGenerator() {
-            console.log('Initializing page generator components');
+            console.log('Initializing page generator components', new Date().toISOString());
+            
+            // Limpeza de qualquer estado anterior ou listeners duplicados
+            if (window.pageGeneratorCleanup) {
+                console.log('Cleaning up previous state');
+                window.pageGeneratorCleanup();
+            }
+            
+            // Criar uma função de limpeza para remover listeners em futuras reinicializações
+            const cleanupFunctions = [];
+            window.pageGeneratorCleanup = function() {
+                cleanupFunctions.forEach(fn => fn());
+                cleanupFunctions.length = 0;
+            };
+            
+            // Função auxiliar para adicionar event listeners com registro para limpeza
+            function addCleanableEventListener(element, event, handler) {
+                element.addEventListener(event, handler);
+                cleanupFunctions.push(() => element.removeEventListener(event, handler));
+            }
             
             // Elementos do formulário
             const routeTitle = document.getElementById('route-title');
@@ -350,6 +433,16 @@
             // Verificar se os elementos essenciais estão presentes
             if (!routeTitle || !routePath || !documentPath || !previewElement) {
                 console.error('Elementos essenciais do formulário não foram encontrados. Verifique o HTML.');
+                
+                // Tentativa de recuperação em caso de carregamento parcial
+                setTimeout(() => {
+                    if (document.getElementById('route-title')) {
+                        console.log('Elements found after delay, retrying initialization');
+                        window.pageGeneratorInitialized = false;
+                        ensureInitialization();
+                    }
+                }, 500);
+                
                 return; // Saída antecipada se faltar algum elemento essencial
             }
             
@@ -510,7 +603,7 @@
 
     // Code to select HTTP method with enhanced animation
         document.querySelectorAll('.pg-method-btn').forEach(button => {
-            button.addEventListener('click', function () {
+            addCleanableEventListener(button, 'click', function () {
                 // If already active, do nothing
                 if (this.classList.contains('active')) return;
                 
@@ -722,7 +815,7 @@
         ];
 
         formFields.forEach(field => {
-            field.addEventListener('input', function () {
+            addCleanableEventListener(field, 'input', function () {
                 generateCurl();
                 updatePreview();
             });
@@ -730,15 +823,15 @@
 
         // Event listeners for the tag inputs
         document.querySelectorAll('input[name="tags"]').forEach(input => {
-            input.addEventListener('change', updatePreview);
+            addCleanableEventListener(input, 'change', updatePreview);
         });
 
         // Permite editar diretamente o comando cURL
-        curlCommand.addEventListener('input', updatePreview);
+        addCleanableEventListener(curlCommand, 'input', updatePreview);
 
         // Botões do editor de campos do Body
-        if (parseBodyBtn) parseBodyBtn.addEventListener('click', parseJsonToFields);
-        if (addFieldBtn) addFieldBtn.addEventListener('click', () => {
+        if (parseBodyBtn) addCleanableEventListener(parseBodyBtn, 'click', parseJsonToFields);
+        if (addFieldBtn) addCleanableEventListener(addFieldBtn, 'click', () => {
             upsertField('field', 'string', false, '', '');
             renderFieldsTable();
             updatePreview();
@@ -803,7 +896,8 @@
         }
 
         // Functionality to generate the page
-        document.getElementById('generate-btn').addEventListener('click', function () {
+        const generateBtn = document.getElementById('generate-btn');
+        addCleanableEventListener(generateBtn, 'click', function () {
             // Validate required fields: need at least one of routePath or documentPath
             if (!routePath.value && !documentPath.value) {
                 alert('Please fill at least the Route Path or the Document Path before generating the file.');
@@ -906,9 +1000,17 @@
             }
         });
 
+            // Verificar qual método está marcado como ativo no HTML
+            const activeMethodBtn = document.querySelector('.pg-method-btn.active');
+            if (activeMethodBtn) {
+                selectedMethod = activeMethodBtn.dataset.method || 'GET';
+            }
+            
             // Inicializa a pré-visualização
             generateCurl();
             updatePreview();
+            
+            console.log('Page generator fully initialized with method:', selectedMethod);
         } // Fim da função initPageGenerator
     </script>
 </body>
