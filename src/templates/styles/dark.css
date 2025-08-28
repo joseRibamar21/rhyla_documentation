@@ -25,8 +25,15 @@
   --pg-border-color: #1e293b;
   --pg-input-bg: #000000;
   --pg-text-color: #e2e8f0;
+  --pg-muted-color: #94a3b8;
   --pg-primary-color: #60a5fa;
   --pg-primary-hover: #3b82f6;
+  --pg-primary-color-alpha: rgba(96, 165, 250, 0.2);
+  --pg-primary-color-light: rgba(96, 165, 250, 0.4);
+  --pg-primary-color-ultra-light: rgba(96, 165, 250, 0.08);
+  --pg-secondary-bg: #111827;
+  --pg-secondary-text: #e2e8f0;
+  --pg-secondary-hover: #1e293b;
   --pg-code-bg: #111827;
   --pg-method-text: #ffffff;
   --pg-get-bg: #3b82f6;
@@ -34,6 +41,11 @@
   --pg-put-bg: #fb923c;
   --pg-delete-bg: #ef4444;
   --pg-patch-bg: #34d399;
+  --pg-tag-hover: #1e293b;
+  --pg-danger-color: #f43f5e;
+  --pg-danger-bg-light: rgba(244, 63, 94, 0.15);
+  --pg-table-header-bg: #111827;
+  --pg-table-hover-bg: #1e293b;
 }
 
 /* Tags HTTP */

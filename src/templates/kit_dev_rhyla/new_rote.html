@@ -4,18 +4,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generator Routes - Rhyla</title>
+    <title>API Page Generator - Rhyla</title>
     <link rel="stylesheet" href="/styles/page-generator.css">
-       
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
 <body class="page-generator-component">
     <div class="page-generator">
-    <h1>API Page Generator</h1>
-    <p>Use this form to generate RESTful API documentation automatically.</p>
+    <h1><i class="fas fa-file-code"></i> API Page Generator</h1>
+    <p>Create standardized documentation for RESTful APIs quickly and consistently.</p>
+    <div class="theme-toggle">
+        <button id="theme-toggle-btn">
+            <i class="fas fa-moon dark-icon"></i>
+            <i class="fas fa-sun light-icon"></i>
+        </button>
+    </div>
+    
+    <script>
+        // Theme toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add theme toggle style
+            const toggleStyle = document.createElement('style');
+            toggleStyle.textContent = `
+                .theme-toggle {
+                    position: absolute;
+                    top: 20px;
+                    right: 20px;
+                }
+                .theme-toggle button {
+                    background: transparent;
+                    border: none;
+                    color: var(--pg-primary-color);
+                    font-size: 1.5rem;
+                    cursor: pointer;
+                    padding: 8px;
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    transition: all 0.3s ease;
+                }
+                .theme-toggle button:hover {
+                    background-color: var(--pg-primary-color-ultra-light);
+                    transform: translateY(-2px);
+                }
+                body[data-theme="dark"] .light-icon {
+                    display: inline-block;
+                }
+                body[data-theme="dark"] .dark-icon {
+                    display: none;
+                }
+                body[data-theme="light"] .light-icon {
+                    display: none;
+                }
+                body[data-theme="light"] .dark-icon {
+                    display: inline-block;
+                }
+                @media (max-width: 768px) {
+                    .theme-toggle {
+                        top: 10px;
+                        right: 10px;
+                    }
+                    .page-generator h1 {
+                        font-size: 1.8rem;
+                        margin-right: 40px;
+                    }
+                    .page-generator > p {
+                        font-size: 0.95rem;
+                        margin-bottom: 20px;
+                    }
+                }
+            `;
+            document.head.appendChild(toggleStyle);
+            
+            const toggleBtn = document.getElementById('theme-toggle-btn');
+            const currentTheme = localStorage.getItem('theme') || 'light';
+            document.body.setAttribute('data-theme', currentTheme);
+            
+            toggleBtn.addEventListener('click', function() {
+                const currentTheme = document.body.getAttribute('data-theme');
+                const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+                document.body.setAttribute('data-theme', newTheme);
+                localStorage.setItem('theme', newTheme);
+            });
+        });
+    </script>
 
         <div class="pg-panel">
-            <h3>Route Information</h3>
+            <h3><i class="fas fa-info-circle"></i> Route Information</h3>
 
             <div class="pg-form-group">
                 <label for="route-title">Route Title</label>
@@ -53,19 +131,26 @@
                 <label>Tags</label>
                 <div class="pg-tags">
                     <label class="pg-tag-option">
-                        <input type="radio" name="tags" value="new"> Novo
+                        <input type="radio" name="tags" value="new">
+                        <span>New</span>
                     </label>
                     <label class="pg-tag-option">
-                        <input type="radio" name="tags" value="dep"> Obsoleto
+                        <input type="radio" name="tags" value="dep">
+                        <span>Deprecated</span>
                     </label>
                     <label class="pg-tag-option">
-                        <input type="radio" name="tags" value="v1"> v1
+                        <input type="radio" name="tags" value="v1">
+                        <span>v1</span>
                     </label>
                     <label class="pg-tag-option">
-                        <input type="radio" name="tags" value="v2"> v2
+                        <input type="radio" name="tags" value="v2">
+                        <span>v2</span>
                     </label>
                     <label class="pg-tag-option">
-                        <input type="radio" name="tags" value="v3"> v3
+                        <input type="radio" name="tags" value="v3">
+                        <span>v3</span>
+                    </label>
+                </div>
                     </label>
                 </div>
             </div>
@@ -78,7 +163,7 @@
         </div>
 
         <div class="pg-panel">
-            <h3>Request Parameters</h3>
+            <h3><i class="fas fa-exchange-alt"></i> Request Parameters</h3>
 
             <div class="pg-col">
                 <div class="pg-col">
@@ -86,13 +171,13 @@
                         <label for="request-body">Request Body (JSON)</label>
                         <textarea id="request-body" class="pg-form-control" 
                             placeholder='{"name": "string", "email": "string"}'></textarea>
-                        <div class="pg-form-group" style="margin-top:8px; gap:8px; display:flex; flex-wrap:wrap; align-items:center;">
-                            <button type="button" id="parse-body-btn" class="pg-btn-secondary">Parse JSON to Fields</button>
-                            <button type="button" id="add-field-btn" class="pg-btn-secondary">Add Field</button>
-                            <small class="pg-note">Tip: Use dot notation for nested fields (e.g. <code>address.street</code>).</small>
+                        <div class="pg-form-group" style="margin-top:12px; gap:10px; display:flex; flex-wrap:wrap; align-items:center;">
+                            <button type="button" id="parse-body-btn" class="pg-btn-secondary"><i class="fas fa-magic"></i> Parse JSON to Fields</button>
+                            <button type="button" id="add-field-btn" class="pg-btn-secondary"><i class="fas fa-plus"></i> Add Field</button>
+                            <small class="pg-note"><i class="fas fa-lightbulb"></i> Tip: Use dot notation for nested fields (e.g. <code>address.street</code>).</small>
                         </div>
-                        <div class="pg-table-wrapper" style="overflow:auto;">
-                            <table class="pg-table" id="body-fields-table" style="min-width:640px; width:100%;">
+                        <div class="pg-table-wrapper" style="overflow-x: auto; max-width: 100%; border-radius: 8px;">
+                            <table class="pg-table" id="body-fields-table" style="min-width:800px; width:100%;">
                                 <thead>
                                     <tr>
                                         <th style="width:22%">Field</th>
@@ -125,7 +210,7 @@
         </div>
 
         <div class="pg-panel">
-            <h3>Responses</h3>
+            <h3><i class="fas fa-reply-all"></i> Responses</h3>
 
             <div class="pg-form-group">
                 <label for="response-success">Success Response (200)</label>
@@ -141,7 +226,7 @@
         </div>
 
         <div class="pg-panel">
-            <h3>cURL Example</h3>
+            <h3><i class="fas fa-terminal"></i> cURL Example</h3>
             <div class="pg-form-group">
                 <label for="curl-command">cURL Command</label>
                 <textarea id="curl-command" class="pg-form-control"
@@ -150,7 +235,7 @@
         </div>
 
         <div class="pg-form-group">
-            <h3>Preview</h3>
+            <h3><i class="fas fa-eye"></i> Preview</h3>
             <div class="pg-preview">
                 # Create User
 
@@ -218,7 +303,7 @@
         </div>
 
         <div class="pg-form-group">
-    <button id="generate-btn" class="pg-btn-primary">Generate Page</button>
+    <button id="generate-btn" class="pg-btn-primary"><i class="fas fa-file-code"></i> Generate Page</button>
     </div>
     </div>
 
@@ -226,28 +311,54 @@
         // Importar funções do gerador de páginas
         import { buildFilePath, generateMDFile } from '/scripts/generatePages.js';
         
-        // Elementos do formulário
-        const routeTitle = document.getElementById('route-title');
-        const routePath = document.getElementById('route-path');
-    const documentPath = document.getElementById('document-path');
-        const routeDescription = document.getElementById('route-description');
-        const requestBody = document.getElementById('request-body');
-        const requestHeaders = document.getElementById('request-headers');
-        const queryParams = document.getElementById('query-params');
-        const responseSuccess = document.getElementById('response-success');
-        const responseError = document.getElementById('response-error');
-    const curlCommand = document.getElementById('curl-command');
-    const previewElement = document.querySelector('.pg-preview');
-    const parseBodyBtn = document.getElementById('parse-body-btn');
-    const addFieldBtn = document.getElementById('add-field-btn');
-    const bodyFieldsTbody = document.getElementById('body-fields-table')?.querySelector('tbody');
+        // Função para garantir a inicialização correta
+        function ensureInitialization() {
+            console.log('DOM fully loaded, initializing page generator script');
+            initPageGenerator();
+        }
+        
+        // Se o DOM já estiver carregado, inicie imediatamente
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            console.log('Document already ready, initializing immediately');
+            setTimeout(ensureInitialization, 1); // Pequeno atraso para garantir que o script module seja processado
+        } else {
+            // Caso contrário, aguarde o evento DOMContentLoaded
+            document.addEventListener('DOMContentLoaded', ensureInitialization);
+        }
+        
+        // Função de inicialização principal
+        function initPageGenerator() {
+            console.log('Initializing page generator components');
+            
+            // Elementos do formulário
+            const routeTitle = document.getElementById('route-title');
+            const routePath = document.getElementById('route-path');
+            const documentPath = document.getElementById('document-path');
+            const routeDescription = document.getElementById('route-description');
+            const requestBody = document.getElementById('request-body');
+            const requestHeaders = document.getElementById('request-headers');
+            const queryParams = document.getElementById('query-params');
+            const responseSuccess = document.getElementById('response-success');
+            const responseError = document.getElementById('response-error');
+            const curlCommand = document.getElementById('curl-command');
+            const previewElement = document.querySelector('.pg-preview');
+            const parseBodyBtn = document.getElementById('parse-body-btn');
+            const addFieldBtn = document.getElementById('add-field-btn');
+            const bodyFieldsTable = document.getElementById('body-fields-table');
+            const bodyFieldsTbody = bodyFieldsTable?.querySelector('tbody');
+            
+            // Verificar se os elementos essenciais estão presentes
+            if (!routeTitle || !routePath || !documentPath || !previewElement) {
+                console.error('Elementos essenciais do formulário não foram encontrados. Verifique o HTML.');
+                return; // Saída antecipada se faltar algum elemento essencial
+            }
+            
+            console.log('All form elements found, continuing initialization');            // Variable to store the selected HTTP method
+            let selectedMethod = 'GET';
 
-    // Variable to store the selected HTTP method
-        let selectedMethod = 'GET';
-
-        // ---------------- Request Body Fields Editor ----------------
-        const bodyFields = [];
-        const TYPE_OPTIONS = ['string','number','boolean','object','array','null'];
+            // ---------------- Request Body Fields Editor ----------------
+            const bodyFields = [];
+            const TYPE_OPTIONS = ['string','number','boolean','object','array','null'];
 
         function upsertField(name, type = 'string', required = false, description = '', example = '') {
             name = (name || '').trim();
@@ -265,8 +376,26 @@
         function renderFieldsTable() {
             if (!bodyFieldsTbody) return;
             bodyFieldsTbody.innerHTML = '';
-            bodyFields.forEach(f => {
+            
+            if (bodyFields.length === 0) {
+                // Show empty state message when no fields
                 const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td colspan="6" style="text-align: center; padding: 30px 20px;">
+                        <div style="color: var(--pg-muted-color); font-size: 0.9rem;">
+                            <i class="fas fa-info-circle" style="font-size: 1.5rem; margin-bottom: 10px; display: block;"></i>
+                            <p>Nenhum campo definido. Use "Parse JSON to Fields" para extrair campos do JSON ou adicione manualmente com "Add Field".</p>
+                        </div>
+                    </td>
+                `;
+                bodyFieldsTbody.appendChild(tr);
+                return;
+            }
+            
+            bodyFields.forEach((f, index) => {
+                const tr = document.createElement('tr');
+                // Add animation delay based on index
+                tr.style.animation = `fadeIn 0.3s ease-out ${index * 0.05}s both`;
                 tr.innerHTML = `
                     <td><input type="text" class="pg-input-name" value="${f.name}"></td>
                     <td>
@@ -275,7 +404,7 @@
                     <td class="pg-col-required"><input type="checkbox" class="pg-input-required" ${f.required?'checked':''}></td>
                     <td><textarea class="pg-input-desc" placeholder="Description...">${f.description||''}</textarea></td>
                     <td><input type="text" class="pg-input-example" placeholder="Example" value="${f.example||''}"></td>
-                    <td><button type="button" class="pg-remove" title="Remove">✕</button></td>
+                    <td><button type="button" class="pg-remove" title="Remove field"><i class="fas fa-times"></i></button></td>
                 `;
                 tr.querySelector('.pg-input-name').addEventListener('input', e => { f.name = e.target.value; syncBodyFromFields(); updatePreview(); });
                 tr.querySelector('.pg-input-type').addEventListener('change', e => { f.type = e.target.value; syncBodyFromFields(); updatePreview(); });
@@ -379,12 +508,57 @@
             return md;
         }
 
-    // Code to select HTTP method
+    // Code to select HTTP method with enhanced animation
         document.querySelectorAll('.pg-method-btn').forEach(button => {
             button.addEventListener('click', function () {
-                // Remove classe active de todos os botões
+                // If already active, do nothing
+                if (this.classList.contains('active')) return;
+                
+                // Create ripple effect
+                const ripple = document.createElement('span');
+                ripple.classList.add('ripple-effect');
+                this.appendChild(ripple);
+                
+                // Position and style ripple
+                const rect = this.getBoundingClientRect();
+                const size = Math.max(rect.width, rect.height);
+                ripple.style.width = ripple.style.height = size + 'px';
+                ripple.style.left = (event.clientX - rect.left - size/2) + 'px';
+                ripple.style.top = (event.clientY - rect.top - size/2) + 'px';
+                
+                // Add ripple styles if not present
+                if (!document.getElementById('ripple-style')) {
+                    const style = document.createElement('style');
+                    style.id = 'ripple-style';
+                    style.textContent = `
+                        .pg-method-btn {
+                            position: relative;
+                            overflow: hidden;
+                        }
+                        .ripple-effect {
+                            position: absolute;
+                            border-radius: 50%;
+                            background-color: rgba(255, 255, 255, 0.4);
+                            transform: scale(0);
+                            animation: ripple 0.6s linear;
+                            pointer-events: none;
+                        }
+                        @keyframes ripple {
+                            to {
+                                transform: scale(2);
+                                opacity: 0;
+                            }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+                
+                // Remove classe active de todos os botões com uma transição suave
                 document.querySelectorAll('.pg-method-btn').forEach(btn => {
-                    btn.classList.remove('active');
+                    if (btn !== this && btn.classList.contains('active')) {
+                        btn.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                        btn.classList.remove('active');
+                    }
                 });
 
                 // Adiciona classe active ao botão clicado
@@ -396,6 +570,11 @@
                 // Gera o cURL e atualiza a pré-visualização
                 generateCurl();
                 updatePreview();
+                
+                // Cleanup ripple element after animation
+                setTimeout(() => {
+                    ripple.remove();
+                }, 600);
             });
         });
 
@@ -450,8 +629,24 @@
             curlCommand.value = curl;
         }
 
-    // Function to update the preview
+    // Function to update the preview with animation
         function updatePreview() {
+            // Add preview animation style if not already present
+            if (!document.getElementById('preview-animation-style')) {
+                const style = document.createElement('style');
+                style.id = 'preview-animation-style';
+                style.textContent = `
+                    @keyframes fadeInPreview {
+                        from { opacity: 0.5; }
+                        to { opacity: 1; }
+                    }
+                    .pg-preview.updating {
+                        animation: fadeInPreview 0.4s ease-out;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
             // Get selected tags
             const selectedTags = [];
             document.querySelectorAll('input[name="tags"]:checked').forEach(tag => {
@@ -512,7 +707,11 @@
             // cURL
             preview += `## Exemplo cURL\n\`\`\`bash\n${curlCommand.value}\n\`\`\``;
 
-            // Atualiza o elemento de pré-visualização
+            // Apply animation class and update content
+            previewElement.classList.remove('updating');
+            // Trigger reflow
+            void previewElement.offsetWidth;
+            previewElement.classList.add('updating');
             previewElement.innerHTML = preview;
         }
 
@@ -626,31 +825,91 @@
             // Visual feedback
             const btn = this;
             btn.disabled = true;
-            btn.innerText = 'Generating...';
+            const originalContent = btn.innerHTML;
+            btn.innerHTML = `<span class="loading-spinner"></span> Generating...`;
+            
+            // Add styles for loading spinner if not already present
+            if (!document.getElementById('loading-spinner-style')) {
+                const style = document.createElement('style');
+                style.id = 'loading-spinner-style';
+                style.textContent = `
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                    .loading-spinner {
+                        display: inline-block;
+                        width: 18px;
+                        height: 18px;
+                        border: 2px solid rgba(255,255,255,0.3);
+                        border-radius: 50%;
+                        border-top-color: #fff;
+                        animation: spin 0.8s linear infinite;
+                        margin-right: 8px;
+                        vertical-align: middle;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
 
             generateMDFile(filePath, content)
                 .then(result => {
                     const relPath = result.path;
                     const fileUrl = window.location.origin + relPath.replace(/\.md$/, '.html');
 
-                    const message = `\nFile generated successfully!\n\nPath: ${result.path}\nMethod: ${selectedMethod}\nFile name: ${filePath.split('/').pop()}\n\nYou can access the page at:\n${fileUrl}`;
-
-                    alert(message);
-                    console.log('File generated:', result);
+                    // Success animation
+                    btn.classList.add('success');
+                    btn.innerHTML = `<i class="fas fa-check"></i> Gerado com sucesso!`;
+                    
+                    setTimeout(() => {
+                        const message = `\nArquivo gerado com sucesso!\n\nCaminho: ${result.path}\nMétodo: ${selectedMethod}\nNome do arquivo: ${filePath.split('/').pop()}\n\nVocê pode acessar a página em:\n${fileUrl}`;
+                        alert(message);
+                        console.log('Arquivo gerado:', result);
+                        
+                        // Reset button after message
+                        btn.disabled = false;
+                        btn.classList.remove('success');
+                        btn.innerHTML = originalContent;
+                    }, 1500);
                 })
                 .catch(error => {
-                    alert(`Error generating file: ${error.message}`);
-                    console.error('Error:', error);
-                })
-                .finally(() => {
-                    btn.disabled = false;
-                    btn.innerText = 'Generate Page';
+                    // Error animation
+                    btn.classList.add('error');
+                    btn.innerHTML = `<i class="fas fa-times"></i> Erro!`;
+                    
+                    setTimeout(() => {
+                        alert(`Erro ao gerar arquivo: ${error.message}`);
+                        console.error('Erro:', error);
+                        
+                        // Reset button after message
+                        btn.disabled = false;
+                        btn.classList.remove('error');
+                        btn.innerHTML = originalContent;
+                    }, 1500);
                 });
+                
+            // Add success and error styles if not already present
+            if (!document.getElementById('button-states-style')) {
+                const style = document.createElement('style');
+                style.id = 'button-states-style';
+                style.textContent = `
+                    .pg-btn-primary.success {
+                        background-color: #10b981 !important;
+                        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+                    }
+                    .pg-btn-primary.error {
+                        background-color: #ef4444 !important;
+                        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3) !important;
+                    }
+                `;
+                document.head.appendChild(style);
+            }
         });
 
-        // Inicializa a pré-visualização
-        generateCurl();
-        updatePreview();
+            // Inicializa a pré-visualização
+            generateCurl();
+            updatePreview();
+        } // Fim da função initPageGenerator
     </script>
 </body>
 
