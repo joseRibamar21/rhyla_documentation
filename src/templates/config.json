@@ -25,6 +25,12 @@
       ]
     },
     {
+      "title": "Configuration",
+      "children": [
+        "config_reference"
+      ]
+    },
+    {
       "title": "Dev",
       "children": [
         "kit_dev_rhyla"
