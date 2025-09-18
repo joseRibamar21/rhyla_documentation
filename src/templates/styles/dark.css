@@ -98,6 +98,17 @@
   }
 }
 
+.group-title {
+  color: #94a3b8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 4px;
+  font-weight: 600;
+}
+
+.rhyla-sidebar .group-header:hover {
+  background: rgba(96, 165, 250, 0.15);
+}
+
 th, td {
   padding: 8px 12px;
   border: 0;

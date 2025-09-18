@@ -47,7 +47,10 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     return false;
   }
 
+  // Obtém lista de arquivos e diretórios no bodyPath
   const rootEntries = fs.readdirSync(bodyPath);
+  
+  // Arquivos na raiz (excluindo os especiais como home.md e notfound.html)
   const rootTopics = rootEntries
     .filter(name => {
       const full = path.join(bodyPath, name);
@@ -56,6 +59,11 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     .filter(name => !isHiddenSpecial(name))
     .filter(name => !shouldIgnorePath(name))
     .map(f => path.basename(f, path.extname(f)));
+
+  // Diretórios na raiz
+  const rootDirs = rootEntries
+    .filter(name => isDir(path.join(bodyPath, name)))
+    .filter(name => !shouldIgnorePath(name));
 
   const methodOf = (topic) => {
     const m = String(topic).toLowerCase();
@@ -124,118 +132,332 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
     return `${methodHtml}${label}${postTagHtml}`;
   };
 
+  // Carrega o arquivo de configuração para ler a estrutura da sidebar
+  let sidebarConfig = [];
+  try {
+    const configPath = path.join(bodyPath, '..', 'config.json');
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      if (Array.isArray(config.sidebar)) {
+        sidebarConfig = config.sidebar;
+      }
+    }
+  } catch (error) {
+    console.error('Erro ao ler configuração da sidebar:', error);
+  }
+
+  // Rastreia itens já renderizados para não duplicá-los
+  const renderedItems = new Set();
+
+  // Início do HTML da sidebar
   let html = `<aside class="rhyla-sidebar"><ul>`;
 
-  // 🏠 Home - usando caminho relativo para evitar duplicação de prefixo
+  // Sempre adiciona Home primeiro
   html += `<li class="item-sidebar ${activeTopic === 'home' ? 'active' : ''}"><a href="./">🏠 Home</a></li>`;
+  renderedItems.add('home');
 
-  // Páginas raiz (exceto Search e Home)
-  for (const topic of rootTopics.sort()) {
-    if (topic.toLowerCase() === 'search' || topic.toLowerCase() === 'home') continue;
-    const isActive = !activeGroup && activeTopic === topic;
-    const method = methodOf(topic);
+  // Função para gerar link para um tópico
+  function generateTopicLink(topic, relPath = '', isActive = false) {
+    // Marca este item como renderizado
+    renderedItems.add(topic.toLowerCase());
     
-    // Processar tópico para extrair pós-tag se houver
-    const { baseTopic, postTag } = getPostTag(topic);
+    const method = methodOf(topic);
+    const { baseTopic, postTag, tagType } = getPostTag(topic);
     
     let label = baseTopic;
     if (method) {
       const dashIdx = baseTopic.indexOf('-');
       label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1) : baseTopic;
     }
-    // Apenas para visualização: substituir '_' por ' '
+    // Substituir '_' por ' ' para visualização
     label = String(label).replace(/_/g, ' ');
     
-    // Para páginas raiz, não adicionamos o '|'
-    const displayContent = tagHTML(method, label, postTag, getPostTag(topic).tagType);
-    html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="./${topic}.html">${displayContent}</a></li>`;
+    // Construção do display HTML com tags
+    const displayContent = tagHTML(method, label, postTag, tagType);
+    
+    // Caminho do arquivo
+    let href = '';
+    if (relPath) {
+      href = `./${relPath}/${topic}.html`;
+    } else {
+      href = `./${topic}.html`;
+    }
+    
+    return `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="${href}">${displayContent}</a></li>`;
   }
 
-  // Render recursivo de diretórios
-  function renderDir(dirAbs, relUrl = '', depth = 0) {
-    // Arquivos diretos neste diretório
-    const entries = fs.readdirSync(dirAbs);
-    const files = entries.filter(name => isFileTopic(name) && !isHiddenSpecial(name)).sort();
-    const dirs = entries.filter(name => isDir(path.join(dirAbs, name))).sort();
-
-    // Função auxiliar para normalizar caminhos e evitar duplicações
-    function normalizePath(inputPath) {
-      // Remove duplicações de diretório (ex: guide/guide/file.html -> guide/file.html)
-      const parts = inputPath.split('/').filter(Boolean);
-      const result = [];
-      
-      for (let i = 0; i < parts.length; i++) {
-        if (i < parts.length - 1 && parts[i] === parts[i+1]) {
-          continue; // Pula duplicações consecutivas
-        }
-        result.push(parts[i]);
-      }
-      
-      return result.join('/');
-    }
-
-    // Arquivos primeiro (exceto na raiz, que já é renderizada acima)
-  if (relUrl) {
-      for (const file of files) {
-    // ignorar por padrão conforme padrões
-    const relForIgnore = relUrl ? `${relUrl}/${file}` : file;
-    if (shouldIgnorePath(relForIgnore)) continue;
-        const topic = path.basename(file, path.extname(file));
-        const relForCompare = relUrl || '';
-        const ag = activeGroup || '';
-        const isActive = (relForCompare === ag) && (activeTopic === topic);
-        const method = methodOf(topic);
+  // Função para renderizar um grupo de itens
+  function renderGroup(title, children, depth = 0) {
+    // Estilos para o título do grupo
+    const titleStyle = `
+      font-weight: bold;
+      color: var(--rh-muted);
+      padding: 16px 0 6px 0;
+      margin-top: ${depth > 0 ? '16px' : '0'};
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    `;
+    
+    // Começa com o cabeçalho do grupo
+    let groupHtml = `
+      <li class="group-title" style="${titleStyle}">
+        ${title}
+      </li>
+    `;
+    
+    // Processar filhos do grupo
+    for (const child of children) {
+      if (typeof child === 'string') {
+        // Item simples
+        if (child.toLowerCase() === 'home') continue; // Home já foi adicionado
         
-        // Processar tópico para extrair pós-tag se houver
-        const { baseTopic, postTag } = getPostTag(topic);
+        const childLower = child.toLowerCase();
         
-        let label = baseTopic;
-        if (method) {
-          const dashIdx = baseTopic.indexOf('-');
-          label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1) : baseTopic;
-        }
-        // Apenas para visualização: substituir '_' por ' '
-        label = String(label).replace(/_/g, ' ');
-        
-        // Para arquivos em subdiretórios, adicionamos o '|' antes do tópico se não houver método HTTP
-        const prefix = method ? 
-          tagHTML(method, label, postTag, getPostTag(topic).tagType) : 
-          tagHTML(null, '| ' + label, postTag, getPostTag(topic).tagType);
+        // Verificar se é um diretório
+        if (rootDirs.some(dir => dir.toLowerCase() === childLower)) {
+          // É um diretório - processar como pasta expansível
+          const dirName = rootDirs.find(dir => dir.toLowerCase() === childLower);
+          const dirPath = path.join(bodyPath, dirName);
           
-        // Construímos caminhos relativos corretos para os tópicos dentro de diretórios
-        const normalizedPath = normalizePath(relUrl);
-        const href = `./${normalizedPath}/${topic}.html`;
-        html += `<li class="item-sidebar ${isActive ? 'active' : ''}"><a href="${href}" data-path="${normalizedPath}">${prefix}</a></li>`;
+          // Criar HTML para diretório expansível
+          const files = fs.readdirSync(dirPath)
+            .filter(name => isFileTopic(name) && !isHiddenSpecial(name))
+            .filter(name => !shouldIgnorePath(`${dirName}/${name}`))
+            .sort();
+          
+          const subDirs = fs.readdirSync(dirPath)
+            .filter(name => isDir(path.join(dirPath, name)))
+            .filter(name => !shouldIgnorePath(`${dirName}/${name}`))
+            .sort();
+          
+          renderedItems.add(dirName.toLowerCase());
+          
+          const isOpen = activeGroup === dirName || (activeGroup && activeGroup.startsWith(dirName + '/'));
+          
+          groupHtml += `
+            <li class="group ${isOpen ? 'open' : ''}">
+              <div class="group-header" onclick="toggleFolder(this)">
+                <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> 📁 ${dirName.replace(/_/g, ' ')}
+              </div>
+              <ul class="group-content" style="${isOpen ? 'max-height:none;' : 'max-height:0;'}">
+          `;
+          
+          // Adicionar arquivos
+          for (const file of files) {
+            const topic = path.basename(file, path.extname(file));
+            const isItemActive = activeGroup === dirName && activeTopic === topic;
+            const method = methodOf(topic);
+            const { baseTopic, postTag, tagType } = getPostTag(topic);
+            
+            let label = baseTopic;
+            if (method) {
+              const dashIdx = baseTopic.indexOf('-');
+              label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1) : baseTopic;
+            }
+            
+            label = String(label).replace(/_/g, ' ');
+            const prefix = method ? 
+              tagHTML(method, label, postTag, tagType) : 
+              tagHTML(null, '| ' + label, postTag, tagType);
+              
+            groupHtml += `<li class="item-sidebar ${isItemActive ? 'active' : ''}">
+              <a href="./${dirName}/${topic}.html">${prefix}</a>
+            </li>`;
+          }
+          
+          // Processar subdiretórios recursivamente
+          for (const subDir of subDirs) {
+            const subDirPath = path.join(dirPath, subDir);
+            const fullSubDirName = `${dirName}/${subDir}`;
+            
+            // Processo similar para subdiretório
+            const subFiles = fs.readdirSync(subDirPath)
+              .filter(name => isFileTopic(name) && !isHiddenSpecial(name))
+              .filter(name => !shouldIgnorePath(`${fullSubDirName}/${name}`))
+              .sort();
+            
+            const subSubDirs = fs.readdirSync(subDirPath)
+              .filter(name => isDir(path.join(subDirPath, name)))
+              .filter(name => !shouldIgnorePath(`${fullSubDirName}/${name}`))
+              .sort();
+              
+            renderedItems.add(fullSubDirName.toLowerCase());
+            
+            const isSubOpen = activeGroup === fullSubDirName || (activeGroup && activeGroup.startsWith(fullSubDirName + '/'));
+            
+            groupHtml += `
+              <li class="group ${isSubOpen ? 'open' : ''}">
+                <div class="group-header" onclick="toggleFolder(this)" style="padding-left: 16px;">
+                  <span class="dropdown-arrow ${isSubOpen ? 'open' : ''}">▶</span> 📁 ${subDir.replace(/_/g, ' ')}
+                </div>
+                <ul class="group-content" style="${isSubOpen ? 'max-height:none;' : 'max-height:0;'}">
+            `;
+            
+            // Adicionar arquivos do subdiretório
+            for (const file of subFiles) {
+              const topic = path.basename(file, path.extname(file));
+              const isItemActive = activeGroup === fullSubDirName && activeTopic === topic;
+              const method = methodOf(topic);
+              const { baseTopic, postTag, tagType } = getPostTag(topic);
+              
+              let label = baseTopic;
+              if (method) {
+                const dashIdx = baseTopic.indexOf('-');
+                label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1) : baseTopic;
+              }
+              
+              label = String(label).replace(/_/g, ' ');
+              const prefix = method ? 
+                tagHTML(method, label, postTag, tagType) : 
+                tagHTML(null, '| ' + label, postTag, tagType);
+                
+              groupHtml += `<li class="item-sidebar ${isItemActive ? 'active' : ''}">
+                <a href="./${fullSubDirName}/${topic}.html">${prefix}</a>
+              </li>`;
+            }
+            
+            // Aqui seria possível adicionar recursão para mais níveis, mas limitamos a 2 para simplicidade
+            
+            groupHtml += `</ul></li>`;
+          }
+          
+          groupHtml += `</ul></li>`;
+        } 
+        // Verificar se é um arquivo
+        else if (rootTopics.some(topic => topic.toLowerCase() === childLower)) {
+          const topicName = rootTopics.find(topic => topic.toLowerCase() === childLower);
+          const isActive = !activeGroup && activeTopic === topicName;
+          groupHtml += generateTopicLink(topicName, '', isActive);
+        }
+      } else if (typeof child === 'object' && child !== null) {
+        // Subgrupo
+        if (child.title && Array.isArray(child.children)) {
+          groupHtml += renderGroup(child.title, child.children, depth + 1);
+        }
       }
     }
-
-    // Subdiretórios
-    for (const d of dirs) {
-      const dirPath = path.join(dirAbs, d);
-      const childRel = relUrl ? normalizePath(`${relUrl}/${d}`) : d;
-      if (shouldIgnorePath(childRel)) continue;
-      const ag = activeGroup || '';
-      const isOpen = ag === childRel || ag.startsWith(childRel + '/'); // abre ancestrais
-      const padHeader = depth * INDENT; // pasta atual
-      const padContent = (depth + 0.3) * INDENT; // conteúdo dentro da pasta
-  // Exibir nome da pasta sem underscores (visual apenas)
-  const displayDir = String(d).replace(/_/g, ' ');
-  // Ícone especial para pasta de desenvolvimento
-  const dirIcon = String(d).toLowerCase() === 'kit_dev_rhyla' ? '⚙️' : '📁';
-      html += `
-        <li class="group ${isOpen ? 'open' : ''}">
-          <div class="group-header" style="padding-left:${padHeader}px;" onclick="toggleFolder(this)">
-    <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> ${dirIcon} ${displayDir}
-          </div>
-          <ul class="group-content" style="max-height:0; padding-left:${padContent}px;">
-      `;
-      renderDir(dirPath, childRel, depth + 0.3);
-      html += `</ul></li>`;
+    
+    return groupHtml;
+  }
+  
+  // Função para processar um diretório como uma pasta expansível
+  function processDirectoryAsExpandable(dirName, dirPath, depth = 0) {
+    const padding = depth * INDENT;
+    renderedItems.add(dirName.toLowerCase());
+    
+    // Listar arquivos e subdiretórios
+    const files = fs.readdirSync(dirPath)
+      .filter(name => isFileTopic(name) && !isHiddenSpecial(name))
+      .filter(name => !shouldIgnorePath(`${dirName}/${name}`))
+      .sort();
+    
+    const subDirs = fs.readdirSync(dirPath)
+      .filter(name => isDir(path.join(dirPath, name)))
+      .filter(name => !shouldIgnorePath(`${dirName}/${name}`))
+      .sort();
+    
+    // Verificar se este diretório está ativo ou qualquer subdiretório está ativo
+    const isActive = activeGroup === dirName || (activeGroup && activeGroup.startsWith(dirName + '/'));
+    
+    // Criar elemento de pasta expansível
+    html += `
+      <li class="group ${isActive ? 'open' : ''}">
+        <div class="group-header" onclick="toggleFolder(this)">
+          <span class="dropdown-arrow ${isActive ? 'open' : ''}">▶</span> 📁 ${dirName.split('/').pop().replace(/_/g, ' ')}
+        </div>
+        <ul class="group-content" style="${isActive ? 'max-height:none;' : 'max-height:0;'}">
+    `;
+    
+    // Adicionar arquivos do diretório
+    for (const file of files) {
+      const topic = path.basename(file, path.extname(file));
+      const isItemActive = activeGroup === dirName && activeTopic === topic;
+      const method = methodOf(topic);
+      const { baseTopic, postTag, tagType } = getPostTag(topic);
+      
+      let label = baseTopic;
+      if (method) {
+        const dashIdx = baseTopic.indexOf('-');
+        label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1) : baseTopic;
+      }
+      
+      label = String(label).replace(/_/g, ' ');
+      const prefix = method ? 
+        tagHTML(method, label, postTag, tagType) : 
+        tagHTML(null, '| ' + label, postTag, tagType);
+        
+      html += `<li class="item-sidebar ${isItemActive ? 'active' : ''}">
+        <a href="./${dirName}/${topic}.html">${prefix}</a>
+      </li>`;
+    }
+    
+    // Processar subdiretórios recursivamente
+    for (const subDir of subDirs) {
+      const subDirPath = path.join(dirPath, subDir);
+      const fullSubDirName = `${dirName}/${subDir}`;
+      processDirectoryAsExpandable(fullSubDirName, subDirPath, depth + 1);
+    }
+    
+    // Fechar a pasta expansível
+    html += `</ul></li>`;
+  }
+  
+  // Renderiza a sidebar conforme a configuração
+  for (const item of sidebarConfig) {
+    if (typeof item === 'string') {
+      // Item simples
+      if (item.toLowerCase() === 'home') continue; // Home já foi adicionado
+      
+      const itemLower = item.toLowerCase();
+      
+      // Verificar se é um diretório ou arquivo e adicionar diretamente (não em um grupo)
+      if (rootDirs.some(dir => dir.toLowerCase() === itemLower)) {
+        const dirName = rootDirs.find(dir => dir.toLowerCase() === itemLower);
+        const dirPath = path.join(bodyPath, dirName);
+        // Processar diretório como pasta expansível
+        processDirectoryAsExpandable(dirName, dirPath);
+      } 
+      else if (rootTopics.some(topic => topic.toLowerCase() === itemLower)) {
+        const topicName = rootTopics.find(topic => topic.toLowerCase() === itemLower);
+        const isActive = !activeGroup && activeTopic === topicName;
+        html += generateTopicLink(topicName, '', isActive);
+      }
+    } else if (typeof item === 'object' && item !== null) {
+      // Grupo com título e filhos
+      if (item.title && Array.isArray(item.children)) {
+        html += renderGroup(item.title, item.children);
+      }
     }
   }
-
-  // Render a partir da raiz do body
-  renderDir(bodyPath, '');
+  
+  // Verifica se há itens não configurados para adicionar no final
+  const unconfiguredTopics = rootTopics.filter(topic => 
+    !renderedItems.has(topic.toLowerCase()) && 
+    topic.toLowerCase() !== 'search' && 
+    topic.toLowerCase() !== 'home'
+  );
+  
+  const unconfiguredDirs = rootDirs.filter(dir => 
+    !renderedItems.has(dir.toLowerCase()) && 
+    !shouldIgnorePath(dir)
+  );
+  
+  // Adicionar itens não configurados diretamente sem título de grupo
+  if (unconfiguredTopics.length > 0 || unconfiguredDirs.length > 0) {
+    // Adicionar diretórios não configurados primeiro
+    for (const dir of unconfiguredDirs) {
+      const dirPath = path.join(bodyPath, dir);
+      processDirectoryAsExpandable(dir, dirPath);
+    }
+    
+    // Adicionar tópicos não configurados depois
+    for (const topic of unconfiguredTopics) {
+      const isActive = !activeGroup && activeTopic === topic;
+      html += generateTopicLink(topic, '', isActive);
+    }
+  }
 
   // Footer estático no final da sidebar
   const footer = `

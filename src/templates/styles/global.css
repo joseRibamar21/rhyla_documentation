@@ -179,7 +179,47 @@ main.rhyla-main h4 { scroll-margin-top: calc(var(--rh-header-height) + 8px); }
 
 /* Sidebar list */
 .rhyla-sidebar ul { list-style: none; padding: 0; margin: 0; }
-.rhyla-sidebar li { margin: 4px 0; padding: 4px 6px; border-radius: 4px; }
+.rhyla-sidebar li { margin: 2px 0; padding: 2px 6px; border-radius: 4px; }
+.rhyla-sidebar li.group-title { 
+  padding: 0 6px; 
+  margin: 24px 0 8px 0; 
+  text-align: left;
+}
+
+.rhyla-sidebar .group {
+  margin: 0;
+  padding: 0;
+}
+
+.rhyla-sidebar .group-header {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.rhyla-sidebar .group-header:hover {
+  background: var(--rh-active-bg);
+}
+
+.rhyla-sidebar .dropdown-arrow {
+  display: inline-block;
+  margin-right: 4px;
+  transition: transform 0.3s ease;
+  font-size: 10px;
+}
+
+.rhyla-sidebar .dropdown-arrow.open {
+  transform: rotate(90deg);
+}
+
+.rhyla-sidebar .group-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+  padding-left: 12px;
+}
 .rhyla-sidebar a {
   display: block;
   text-decoration: none;

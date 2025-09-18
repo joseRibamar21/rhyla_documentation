@@ -7,5 +7,28 @@
   "base": "/",
   "build_ignore": [
     "kit_dev_rhyla"
+  ],
+  "sidebar":[
+    "home",
+    {
+      "title": "Clients",
+      "children": [
+        "clients"
+      ]
+    },
+    {
+      "title": "Guide",
+      "children": [
+        "tag-new",
+        "page_generator",
+        "guide"
+      ]
+    },
+    {
+      "title": "Dev",
+      "children": [
+        "kit_dev_rhyla"
+      ]
+    }
   ]
 }
