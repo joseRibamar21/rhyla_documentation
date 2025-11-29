@@ -25,15 +25,9 @@
       ]
     },
     {
-      "title": "Configuration",
+      "title": "Release Notes",
       "children": [
-        "config_reference"
-      ]
-    },
-    {
-      "title": "Dev",
-      "children": [
-        "kit_dev_rhyla"
+        "release_notes_1.0.8"
       ]
     }
   ]
