@@ -63,29 +63,31 @@ export default function init() {
   // Copiar header e footer
   fs.copyFileSync(path.join(templatesPath, 'header.html'), path.join(rhylaPath, 'header.html'));
 
-  // Copiar home.md
+  // Copiar arquivos principais
   fs.copyFileSync(path.join(templatesPath, 'home.md'), path.join(rhylaPath, 'body', 'home.md'));
-
-  // Copiar notFound.html
   fs.copyFileSync(path.join(templatesPath, 'notFound.html'), path.join(rhylaPath, 'body', 'notFound.html'));
-
-  // Copiar config.json
   fs.copyFileSync(path.join(templatesPath, 'config.json'), path.join(rhylaPath, 'config.json'));
+
+  // Copiar guias de documentação
+  fs.copyFileSync(path.join(templatesPath, 'how-it-works.md'), path.join(rhylaPath, 'body', 'how-it-works.md'));
+  fs.copyFileSync(path.join(templatesPath, 'quick-start.md'), path.join(rhylaPath, 'body', 'quick-start.md'));
+  fs.copyFileSync(path.join(templatesPath, 'markdown-features.md'), path.join(rhylaPath, 'body', 'markdown-features.md'));
+  fs.copyFileSync(path.join(templatesPath, 'config_reference.md'), path.join(rhylaPath, 'body', 'config_reference.md'));
+  fs.copyFileSync(path.join(templatesPath, 'cli-reference.md'), path.join(rhylaPath, 'body', 'cli-reference.md'));
+  fs.copyFileSync(path.join(templatesPath, 'page_generator.md'), path.join(rhylaPath, 'body', 'page_generator.md'));
+  fs.copyFileSync(path.join(templatesPath, 'tag-new.html'), path.join(rhylaPath, 'body', 'tag-new.html'));
+  
+  // Copiar guias de customização e deployment
+  fs.copyFileSync(path.join(templatesPath, 'customization.md'), path.join(rhylaPath, 'body', 'customization.md'));
+  fs.copyFileSync(path.join(templatesPath, 'deployment.md'), path.join(rhylaPath, 'body', 'deployment.md'));
+  fs.copyFileSync(path.join(templatesPath, 'troubleshooting.md'), path.join(rhylaPath, 'body', 'troubleshooting.md'));
 
   // Copiar estilos
   fs.cpSync(path.join(templatesPath, 'styles'), path.join(rhylaPath, 'styles'), { recursive: true });
 
-  // copiar clients
+  // Copiar pastas de conteúdo
   fs.cpSync(path.join(templatesPath, 'clients'), path.join(rhylaPath, 'body', 'clients'), { recursive: true });
-
   fs.cpSync(path.join(templatesPath, 'releases'), path.join(rhylaPath, 'body', 'releases'), { recursive: true });
-
-
-  fs.copyFileSync(path.join(templatesPath, 'tag-new.html'), path.join(rhylaPath, 'body', 'tag-new.html'));
-
-  fs.copyFileSync(path.join(templatesPath, 'page_generator.md'), path.join(rhylaPath, 'body', 'page_generator.md'));
-
-  fs.copyFileSync(path.join(templatesPath, 'config_reference.md'), path.join(rhylaPath, 'body', 'config_reference.md'));
 
   // Copiar public (inclui logo.png se existir)
   const publicTpl = path.join(templatesPath, 'public');

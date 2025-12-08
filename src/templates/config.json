@@ -1,35 +1,53 @@
 {
-  "title": "Documentation Standard",
-  "description": "Generated with Rhyla",
+  "title": "Rhyla Documentation",
+  "description": "Fast, beautiful documentation generator for modern projects",
   "site_url": "https://rhyladoc.com/",
   "side_topics": true,
   "allow_raw_html": false,
   "base": "/",
   "password_doc": {
-    "enabled": true,
-    "passwords": [
-      "password_doc123"
-    ]
+    "enabled": false,
+    "passwords": []
   },
   "build_ignore": [
     "kit_dev_rhyla"
   ],
-  "sidebar":[
+  "sidebar": [
     "home",
-    "how-it-works",
     {
-      "title": "Clients",
+      "title": "Getting Started",
       "children": [
-        "clients"
+        "quick-start",
+        "how-it-works"
       ]
     },
     {
-      "title": "Guide",
+      "title": "Documentation",
       "children": [
-        "tag-new",
-        "page_generator",
+        "markdown-features",
         "config_reference",
-        "guide"
+        "cli-reference",
+        "page_generator"
+      ]
+    },
+    {
+      "title": "Customization",
+      "children": [
+        "customization",
+        "tag-new"
+      ]
+    },
+    {
+      "title": "Deployment & Help",
+      "children": [
+        "deployment",
+        "troubleshooting"
+      ]
+    },
+    {
+      "title": "Clients & Examples",
+      "children": [
+        "clients"
       ]
     },
     {
