@@ -5,11 +5,18 @@
   "side_topics": true,
   "allow_raw_html": false,
   "base": "/",
+  "password_doc": {
+    "enabled": true,
+    "passwords": [
+      "password_doc123"
+    ]
+  },
   "build_ignore": [
     "kit_dev_rhyla"
   ],
   "sidebar":[
     "home",
+    "how-it-works",
     {
       "title": "Clients",
       "children": [
@@ -21,13 +28,14 @@
       "children": [
         "tag-new",
         "page_generator",
+        "config_reference",
         "guide"
       ]
     },
     {
       "title": "Release Notes",
       "children": [
-        "release_notes_1.0.8"
+        "releases/release_notes_1.0.8"
       ]
     }
   ]

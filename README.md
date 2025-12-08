@@ -92,7 +92,66 @@ Generated routes:
 - Need a special page (internal landing)? Create a `.html` in that folder.
 - Restructuring? Just move/rename folders/files and restart the server (or reload) to reflect changes.
 
---- 
+---
+
+## 🆕 New in Version 1.0.8
+
+### 🔒 Password Protection
+Protect your documentation with password authentication:
+
+```json
+{
+  "password_doc": {
+    "enabled": true,
+    "passwords": [
+      "yourSecurePassword123",
+      "anotherValidPassword456"
+    ]
+  }
+}
+```
+
+**Features:**
+- ✅ Multiple valid passwords support
+- ✅ Automatic 5-minute lockout after 5 failed attempts
+- ✅ Beautiful centered login card with blurred background
+- ✅ Persistent authentication across sessions
+- ✅ Real-time attempt counter
+
+**Developer Note:** Use `rhylaLogout()` in the browser console to clear authentication during development.
+
+### 📑 Custom Sidebar Groups
+Organize your documentation with custom groups:
+
+```json
+{
+  "sidebar": [
+    "home",
+    {
+      "title": "Getting Started",
+      "children": [
+        "introduction",
+        "installation"
+      ]
+    },
+    {
+      "title": "API Reference",
+      "children": [
+        "api/endpoints",
+        "api/authentication"
+      ]
+    }
+  ]
+}
+```
+
+**Features:**
+- ✅ Custom group titles
+- ✅ Expandable/collapsible folders
+- ✅ Support for nested paths
+- ✅ Direct file references within folders
+
+---
 
 ## ⚠️ Limitations
 - Navigation and structure depend on using .md or .html files.

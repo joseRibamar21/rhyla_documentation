@@ -78,17 +78,14 @@ export default function init() {
   // copiar clients
   fs.cpSync(path.join(templatesPath, 'clients'), path.join(rhylaPath, 'body', 'clients'), { recursive: true });
 
-  fs.cpSync(path.join(templatesPath, 'guide'), path.join(rhylaPath, 'body', 'guide'), { recursive: true });
+  fs.cpSync(path.join(templatesPath, 'releases'), path.join(rhylaPath, 'body', 'releases'), { recursive: true });
 
 
   fs.copyFileSync(path.join(templatesPath, 'tag-new.html'), path.join(rhylaPath, 'body', 'tag-new.html'));
 
-  fs.cpSync(path.join(templatesPath, 'kit_dev_rhyla'), path.join(rhylaPath, 'body', 'kit_dev_rhyla'), { recursive: true });
-
   fs.copyFileSync(path.join(templatesPath, 'page_generator.md'), path.join(rhylaPath, 'body', 'page_generator.md'));
 
   fs.copyFileSync(path.join(templatesPath, 'config_reference.md'), path.join(rhylaPath, 'body', 'config_reference.md'));
-
 
   // Copiar public (inclui logo.png se existir)
   const publicTpl = path.join(templatesPath, 'public');

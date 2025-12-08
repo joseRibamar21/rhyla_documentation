@@ -212,6 +212,28 @@ export default function dev() {
       header = header.replace(/<head[^>]*>/i, (m) => m + metaTag);
     }
   }
+  
+  // Adicionar scripts antes do fechamento do body
+  const scriptsToAdd = [];
+  
+  // Script de cópia de código
+  const copyCodePath = path.join(scriptsFolderPath, 'copy-code-novo.js');
+  if (fs.existsSync(copyCodePath)) {
+    scriptsToAdd.push('<script src="/scripts/copy-code-novo.js"></script>');
+    console.log('✅ Script de cópia de código encontrado');
+  }
+  
+  // Script de autenticação por senha
+  const authScriptPath = path.join(scriptsFolderPath, 'password-auth.js');
+  if (fs.existsSync(authScriptPath)) {
+    scriptsToAdd.push('<script src="/scripts/password-auth.js"></script>');
+    console.log('✅ Script de autenticação encontrado');
+  }
+  
+  // Adicionar todos os scripts ao header
+  if (scriptsToAdd.length > 0 && /<\/body>/i.test(header)) {
+    header = header.replace(/<\/body>/i, `${scriptsToAdd.join('\n')}\n</body>`);
+  }
 
   // Home
   app.get("/", (req, res) => {

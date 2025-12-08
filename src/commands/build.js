@@ -280,6 +280,8 @@ export default function build() {
       // Caminho para os scripts runtime
       const headerRuntimePath = path.join(templatesPath, 'scripts', 'header-runtime.js');
       const searchRuntimePath = path.join(templatesPath, 'scripts', 'search-runtime.js');
+      const copyCodePath = path.join(templatesPath, 'scripts', 'copy-code-novo.js');
+      const passwordAuthPath = path.join(templatesPath, 'scripts', 'password-auth.js');
       
       // Incorporar header-runtime.js se existir
       if (fs.existsSync(headerRuntimePath)) {
@@ -307,6 +309,28 @@ export default function build() {
       
       // Adicionar o script de correção de CSS antes do fechamento do head
       processedHtml = processedHtml.replace(/<\/head>/i, `${cssFixScript}\n</head>`);
+      
+      // Incorporar copy-code-novo.js para funcionalidade de copiar código
+      if (fs.existsSync(copyCodePath)) {
+        const copyCodeContent = fs.readFileSync(copyCodePath, 'utf8')
+                                 .replace(/<\/script>/gi, '<\\/script>');
+                                 
+        processedHtml = processedHtml.replace(
+          /<\/body>/i,
+          `<script>\n// SCRIPT DE CÓPIA DE CÓDIGO\n${copyCodeContent}\n</script>\n</body>`
+        );
+      }
+      
+      // Incorporar password-auth.js para sistema de autenticação
+      if (fs.existsSync(passwordAuthPath)) {
+        const passwordAuthContent = fs.readFileSync(passwordAuthPath, 'utf8')
+                                     .replace(/<\/script>/gi, '<\\/script>');
+                                     
+        processedHtml = processedHtml.replace(
+          /<\/body>/i,
+          `<script>\n// SISTEMA DE AUTENTICAÇÃO POR SENHA\n${passwordAuthContent}\n</script>\n</body>`
+        );
+      }
       
       return processedHtml;
     } catch {
