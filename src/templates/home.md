@@ -59,6 +59,11 @@ Naming tips:
 
 ---
 
+## 🔀 Flows
+Connect pages into processes: a page with `type: flow` and a list of `steps` becomes a clickable diagram, and every page in it gets previous/next navigation. See the example in [Publish your docs](/flows/publish_docs).
+
+---
+
 ## 🎨 Theming & layout
 - Design tokens (colors, fonts, sizes) live in `styles/global.css` as CSS variables, for light and dark (`html[data-theme="dark"]`).
 - Override any token in `styles/light.css` or `styles/dark.css`, e.g. `:root { --rh-accent: #0f766e; }`.

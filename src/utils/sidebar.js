@@ -20,9 +20,12 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       .map((e) => e.name);
 
   // Rótulo: `title` do frontmatter (escapado) ou o nome do arquivo
+  const FLOW_ICON = '<svg class="rh-sidebar-flow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="flow"><rect x="3" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="15" width="7" height="6" rx="1.5"/><path d="M6.5 9v3a3 3 0 0 0 3 3h4.5"/></svg>';
   const labelFor = (fileAbs, fallback) => {
-    const title = readFrontmatter(fileAbs).title;
-    return title ? escapeHtml(title) : String(fallback).replace(/_/g, ' ');
+    const data = readFrontmatter(fileAbs);
+    const label = data.title ? escapeHtml(data.title) : String(fallback).replace(/_/g, ' ');
+    // Páginas de fluxo ganham um ícone
+    return data.type === 'flow' ? FLOW_ICON + label : label;
   };
 
   const rootEntries = fs.readdirSync(bodyPath);
