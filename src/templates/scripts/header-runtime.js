@@ -154,7 +154,7 @@
 
   // Navegação SPA leve: intercepta links internos e troca apenas o <main>
   function isInternalNavigable(a) {
-    if (!a || a.getAttribute('target') === '_blank') return false;
+    if (!a || a.getAttribute('target') === '_blank' || a.hasAttribute('data-no-spa')) return false;
     // getAttribute funciona também em <a> dentro de SVG (diagramas de fluxo)
     const url = new URL(a.getAttribute('href') || '', location.href);
     if (url.origin !== location.origin) return false;

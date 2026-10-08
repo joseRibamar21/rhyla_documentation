@@ -9,6 +9,7 @@ import { collectPages, resolvePageFile } from "../core/pages.js";
 import { buildSearchIndex, buildLlmsTxt, buildLlmsFullTxt } from "../core/artifacts.js";
 import { applyPageMeta, assemblePage } from "../core/layout.js";
 import { buildFlowGraph, decoratePage } from "../core/flows.js";
+import { registerEditorRoutes, EDITOR_BASE } from "./dev-editor.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -107,6 +108,7 @@ export default function dev(opts = {}) {
   const flowLinks = {
     hrefFor: (slug) => (slug === "home" ? "/" : `/${slug}.html`),
     mdHrefFor: (slug) => `/${slug === "home" ? "index" : slug}.md`,
+    editHrefFor: (slug) => `${EDITOR_BASE}/flow-editor?flow=${encodeURIComponent(slug)}`,
   };
   const withFlows = (pages) => {
     const graph = buildFlowGraph(pages);
@@ -151,6 +153,9 @@ export default function dev(opts = {}) {
     const page = decorateOne(ctx, renderFile(resolved.file, ctx), resolved.slug);
     res.type("text/markdown; charset=utf-8").send(page.markdown);
   });
+
+  // Editor de fluxos (interface + API)
+  registerEditorRoutes(app, { bodyPath, publicPath: path.join(rhylaPath, "public"), context, allPages, log });
 
   // Endpoint usado pelo kit_dev_rhyla para gerar arquivos markdown
   app.post("/generate-page", (req, res) => {
@@ -206,7 +211,11 @@ export default function dev(opts = {}) {
     const sidebar = isHome
       ? generateSidebarHTML(bodyPath, null, "home")
       : generateSidebarHTML(bodyPath, resolved.group, resolved.topic);
-    const content = isDevKit ? page.html : decorateOne(ctx, page, resolved.slug).html;
+    let content = isDevKit ? page.html : decorateOne(ctx, page, resolved.slug).html;
+    // Atalho para o editor de páginas (só no dev, só para .md)
+    if (page.markdown !== null) {
+      content = `<div class="rh-page-tools"><a class="rh-page-edit" href="${EDITOR_BASE}/page-editor?page=${encodeURIComponent(resolved.slug)}" data-no-spa>Edit page</a></div>${content}`;
+    }
     res.send(assemblePage(header, sidebar, content));
   });
 
