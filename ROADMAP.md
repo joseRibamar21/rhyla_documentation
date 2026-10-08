@@ -23,19 +23,20 @@ Pages connected into processes (user journeys, API call sequences, troubleshooti
 - [ ] Overview map: every page and every flow connection in one navigable tree/graph
 - [ ] Better layout for large flows (crossing reduction, zoom and pan, collapsible branches)
 
-## 🔜 Next
-
 ### Flow editor
 
 A visual editor in `rhyla dev` to build flows without writing YAML. It saves the same `type: flow` frontmatter, so flows stay editable by hand and by AI agents.
 
-- Canvas with the same layout as the published diagram
-- Add steps by searching existing pages, or create a new page right from the canvas
-- Connect steps by dragging; label branches inline
-- Decision/text steps, loops and end steps
-- Live validation (missing pages, unreachable steps, unknown ids)
-- "Edit flow" button on flow pages while running `rhyla dev`
-- Implementation note: evaluate building on the current SVG layout vs. a canvas library such as xyflow
+- [x] Canvas with the same layout as the published diagram (`/__rhyla/flow-editor`)
+- [x] Add steps by searching existing pages, or create a new page right from the editor
+- [x] Connect steps from the canvas (select, press C, click the target) or from the side panel; label branches
+- [x] Decision/text steps, loops, start step, page text
+- [x] Live validation (missing pages, unknown ids), undo/redo, keyboard shortcuts
+- [x] "Edit flow" button on flow pages while running `rhyla dev`
+- [ ] Drag to connect and to reorder steps directly on the canvas
+- [ ] Manual positioning for large flows (today the layout is automatic)
+
+## 🔜 Next
 
 ### Page editor (Notion-like)
 

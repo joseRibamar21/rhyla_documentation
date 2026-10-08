@@ -179,6 +179,8 @@ export function layoutFlow(flow) {
   const contentW = widest * NODE_W + (widest - 1) * GAP_X;
   const backEdges = [];
   steps.forEach((s) => s.next.forEach((n) => { if (back.has(`${s.id}>${n.to}`)) backEdges.push({ from: s.id, to: n.to, label: n.label }); }));
+  // Arestas de retorno com rótulo ficam nas faixas mais externas (o texto não é cruzado por outras)
+  backEdges.sort((a, b) => Number(Boolean(a.label)) - Number(Boolean(b.label)));
   const edges = [];
   steps.forEach((s) => forward(s).forEach((n) => edges.push({ from: s.id, to: n.to, label: n.label, skip: rank.get(n.to) - rank.get(s.id) > 1 })));
 
@@ -266,9 +268,10 @@ export function renderFlowDiagram(flow, { hrefFor, currentStepId, idSuffix = '' 
       sub ? `<text class="rh-flow-sub" x="${cx}" y="${n.y + 40}">${escapeHtml(clip(sub, 32))}</text>` : '',
       `<title>${escapeHtml(step.title)}${step.note ? ' — ' + escapeHtml(step.note) : ''}</title>`,
     ].join('');
+    const attrs = `class="${cls.join(' ')}" data-step="${escapeHtml(step.id)}"`;
     out.push(step.slug
-      ? `<a href="${escapeHtml(hrefFor(step.slug))}" class="${cls.join(' ')}">${inner}</a>`
-      : `<g class="${cls.join(' ')}">${inner}</g>`);
+      ? `<a href="${escapeHtml(hrefFor(step.slug))}" ${attrs}>${inner}</a>`
+      : `<g ${attrs}>${inner}</g>`);
   }
   out.push('</svg>');
   return out.join('');
@@ -324,14 +327,16 @@ export function flowToMarkdown(flow, mdHrefFor) {
  *
  * @returns {{ html: string, markdown: string|null }}
  */
-export function decoratePage(page, graph, { hrefFor, mdHrefFor }) {
+export function decoratePage(page, graph, { hrefFor, mdHrefFor, editHrefFor }) {
   let html = page.html;
   let markdown = page.markdown;
   const slug = normSlug(page.slug);
 
   const flow = graph.flows.find((f) => f.slug === slug);
   if (flow) {
-    const diagram = `<figure class="rh-flow">${renderFlowDiagram(flow, { hrefFor })}</figure>${warningsHtml(flow)}`;
+    // No `rhyla dev` o diagrama ganha um atalho para o editor de fluxos
+    const edit = editHrefFor ? `<a class="rh-flow-edit" href="${escapeHtml(editHrefFor(flow.slug))}" data-no-spa>Edit flow</a>` : '';
+    const diagram = `<figure class="rh-flow">${edit}${renderFlowDiagram(flow, { hrefFor })}</figure>${warningsHtml(flow)}`;
     // Diagrama logo depois do H1, se houver
     html = /<\/h1>/i.test(html) ? html.replace(/<\/h1>/i, (m) => `${m}\n${diagram}`) : diagram + html;
     if (markdown !== null) markdown = `${markdown.trimEnd()}\n\n${flowToMarkdown(flow, mdHrefFor)}\n`;
@@ -351,4 +356,36 @@ export function decoratePage(page, graph, { hrefFor, mdHrefFor }) {
     }
   }
   return { html, markdown };
+}
+
+/**
+ * Converte os passos do editor para o frontmatter mais enxuto possível
+ * (omite campos vazios; `next` com um destino sem rótulo vira string).
+ */
+export function compactSteps(steps) {
+  return (steps || []).map((st) => {
+    const out = { id: String(st.id) };
+    if (st.page) out.page = normSlug(st.page);
+    if (st.title) out.title = String(st.title);
+    if (st.note) out.note = String(st.note);
+    const next = (st.next || []).filter((n) => n && n.to).map((n) => (n.label ? { to: String(n.to), label: String(n.label) } : { to: String(n.to) }));
+    if (next.length === 1 && !next[0].label) out.next = next[0].to;
+    else if (next.length) out.next = next;
+    return out;
+  });
+}
+
+/** Passos crus do frontmatter no formato do editor: { id, page, title, note, next: [{ to, label }] }. */
+export function editableSteps(rawSteps) {
+  return (Array.isArray(rawSteps) ? rawSteps : []).map((raw, i) => {
+    const s = typeof raw === 'string' ? { page: raw } : raw || {};
+    const page = s.page ? normSlug(s.page) : '';
+    return {
+      id: String(s.id || page.split('/').pop() || `step-${i + 1}`),
+      page,
+      title: s.title ? String(s.title) : '',
+      note: s.note ? String(s.note) : '',
+      next: normalizeNext(s.next),
+    };
+  });
 }

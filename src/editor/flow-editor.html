@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Flow editor · Rhyla</title>
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('rhyla-theme'); } catch (e) {}
+      var theme = saved === 'dark' || saved === 'light' ? saved
+        : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="stylesheet" href="/styles/global.css">
+  <link rel="stylesheet" href="/__rhyla/editor/flow-editor.css">
+</head>
+<body class="fe">
+  <header class="fe-top">
+    <a class="fe-back" href="/" id="fe-back" title="Back to the docs">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Docs
+    </a>
+    <div class="fe-title">
+      <svg class="fe-title-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="6" rx="1.5"/><rect x="14" y="15" width="7" height="6" rx="1.5"/><path d="M6.5 9v3a3 3 0 0 0 3 3h4.5"/></svg>
+      <span>Flow editor</span>
+      <span class="fe-sep">/</span>
+      <strong id="fe-name">New flow</strong>
+      <span class="fe-dirty" id="fe-dirty" hidden title="Unsaved changes">●</span>
+    </div>
+    <div class="fe-actions">
+      <button class="fe-btn" id="fe-undo" title="Undo (Ctrl+Z)" aria-label="Undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+      </button>
+      <button class="fe-btn" id="fe-redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+      </button>
+      <a class="fe-btn" id="fe-open" href="#" target="_blank" hidden>Open page ↗</a>
+      <a class="fe-btn" href="/__rhyla/flow-editor" id="fe-new">New flow</a>
+      <button class="fe-btn fe-btn--primary" id="fe-save">Save <kbd class="rh-kbd" data-shortcut-save>Ctrl S</kbd></button>
+    </div>
+  </header>
+
+  <main class="fe-main">
+    <section class="fe-canvas-wrap" aria-label="Flow diagram">
+      <div class="fe-tools">
+        <button class="fe-btn" id="fe-add-page">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+          Page step
+        </button>
+        <button class="fe-btn" id="fe-add-text">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 12 12 21 3 12z"/></svg>
+          Decision
+        </button>
+        <span class="fe-hint" id="fe-hint"></span>
+      </div>
+      <div class="fe-canvas" id="fe-canvas" tabindex="0">
+        <div class="fe-stage" id="fe-stage"></div>
+        <div class="fe-empty" id="fe-empty" hidden>
+          <p><strong>Start your flow</strong></p>
+          <p>Add a page step or a decision. Select a step and add another to connect them automatically.</p>
+        </div>
+      </div>
+      <div class="fe-zoom">
+        <button class="fe-btn" id="fe-zoom-out" aria-label="Zoom out">−</button>
+        <span id="fe-zoom-level">100%</span>
+        <button class="fe-btn" id="fe-zoom-in" aria-label="Zoom in">+</button>
+        <button class="fe-btn" id="fe-zoom-fit">Fit</button>
+      </div>
+    </section>
+
+    <aside class="fe-panel" id="fe-panel" aria-label="Properties"></aside>
+  </main>
+
+  <!-- Seletor de páginas (adicionar passo / escolher página) -->
+  <div class="fe-picker" id="fe-picker" hidden>
+    <div class="fe-picker-backdrop" data-close-picker></div>
+    <div class="fe-picker-panel" role="dialog" aria-modal="true" aria-label="Choose a page">
+      <input id="fe-picker-input" type="search" placeholder="Search pages…" autocomplete="off" spellcheck="false">
+      <div class="fe-picker-list" id="fe-picker-list" role="listbox"></div>
+      <div class="fe-picker-new">
+        <span>Not there?</span>
+        <input id="fe-picker-new-path" placeholder="new/page_path" spellcheck="false">
+        <button class="fe-btn" id="fe-picker-create">Create page</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="fe-toast" id="fe-toast" role="status" aria-live="polite"></div>
+
+  <script src="/__rhyla/editor/flow-editor.js"></script>
+</body>
+</html>

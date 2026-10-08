@@ -77,6 +77,8 @@ steps:
 
 Rhyla draws the diagram (clickable steps, branches and loops), adds previous/next navigation and a mini-map to every page in the flow, and lists the steps in the `.md` output for agents. Steps without `page` are text or decision nodes. `rhyla init` includes an example in `body/flows/`.
 
+**Flow editor.** While `rhyla dev` is running, open `http://localhost:3333/__rhyla/flow-editor` (or click **Edit flow** on any flow page) to build flows visually: add steps by searching pages (or create a page on the spot), connect them on the canvas, label branches, undo/redo, and save. It writes the same frontmatter shown above, so flows stay editable by hand and by AI agents.
+
 ### API pages
 
 The file name can carry an HTTP method and tags, rendered as badges in the sidebar: `post-create_user-new.md` → **POST** create user **new**. Methods: `get-`, `post-`, `put-`, `patch-`, `delete-`. Tags: `-new`, `-dep`, `-v1`, `-v1.2.0`…

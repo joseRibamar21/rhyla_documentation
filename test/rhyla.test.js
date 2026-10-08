@@ -369,3 +369,78 @@ describe('flows', () => {
     assert.deepEqual(flow.steps.find((s) => s.id === 'api').next.map((n) => n.label), ['yes', 'no']);
   });
 });
+
+describe('flow editor api (dev)', () => {
+  let server;
+  let base;
+  let dir;
+  const api = (p, method = 'GET', body) => fetch(base + '/__rhyla/api' + p, {
+    method,
+    headers: body ? { 'content-type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  before(async () => {
+    dir = tmpProject();
+    server = dev({ cwd: dir, port: 0, quiet: true });
+    await new Promise((r) => server.once('listening', r));
+    base = `http://127.0.0.1:${server.address().port}`;
+  });
+  after(() => server.close());
+
+  test('serves the editor and links to it from flow pages', async () => {
+    assert.equal((await fetch(base + '/__rhyla/flow-editor')).status, 200);
+    assert.equal((await fetch(base + '/__rhyla/editor/flow-editor.js')).status, 200);
+    const page = await (await fetch(base + '/flows/publish_docs')).text();
+    assert.match(page, /class="rh-flow-edit" href="\/__rhyla\/flow-editor\?flow=flows%2Fpublish_docs"/);
+  });
+
+  test('lists pages and loads a flow in editable form', async () => {
+    const { pages } = await (await api('/pages')).json();
+    assert.ok(pages.some((p) => p.slug === 'flows/publish_docs' && p.type === 'flow'));
+    const flow = await (await api('/flow?slug=flows/publish_docs')).json();
+    assert.equal(flow.title, 'Publish your docs');
+    assert.deepEqual(flow.steps.find((s) => s.id === 'api').next, [{ to: 'generator', label: 'yes' }, { to: 'build', label: 'no' }]);
+    assert.match(flow.body, /This is a \*\*flow\*\*/);
+    assert.equal((await api('/flow?slug=zeta/z-first')).status, 400);
+    assert.equal((await api('/flow?slug=../../etc/passwd')).status, 400);
+  });
+
+  test('previews a draft with warnings', async () => {
+    const data = await (await api('/flow/preview', 'POST', {
+      slug: 'flows/draft', title: 'Draft',
+      steps: [{ id: 'a', page: 'zeta/z-first', next: [{ to: 'b', label: 'go' }] }, { id: 'b', page: 'nope/missing', next: [] }],
+    })).json();
+    assert.match(data.svg, /data-step="a"/);
+    assert.deepEqual(data.warnings, ['step "b": page "nope/missing" not found']);
+  });
+
+  test('saves a new flow and keeps unknown frontmatter on update', async () => {
+    const steps = [{ id: 'a', page: 'zeta/z-first', next: [{ to: 'b' }] }, { id: 'b', title: 'Done', next: [] }];
+    let res = await api('/flow', 'PUT', { slug: 'flows/new_one', title: 'New one', steps, body: 'Intro' });
+    assert.equal(res.status, 200);
+    const file = path.join(dir, 'rhyla-docs/body/flows/new_one.md');
+    let text = fs.readFileSync(file, 'utf8');
+    assert.match(text, /type: flow/);
+    assert.match(text, /- id: a\n {4}page: zeta\/z-first\n {4}next: b/);
+    assert.match(text, /\nIntro\n$/);
+
+    fs.writeFileSync(file, text.replace('type: flow', 'type: flow\norder: 3'));
+    res = await api('/flow', 'PUT', { slug: 'flows/new_one', title: 'Renamed', steps, body: 'Intro' });
+    text = fs.readFileSync(file, 'utf8');
+    assert.match(text, /order: 3/);
+    assert.match(text, /title: Renamed/);
+
+    assert.equal((await api('/flow', 'PUT', { slug: 'zeta/z-first', title: 'x', steps })).status, 409);
+    assert.equal((await api('/flow', 'PUT', { slug: '../escape', title: 'x', steps })).status, 400);
+    assert.equal((await api('/flow', 'PUT', { slug: 'flows/x', title: '', steps })).status, 400);
+  });
+
+  test('creates stub pages for new steps', async () => {
+    const res = await api('/page', 'POST', { slug: 'checkout/review_order' });
+    assert.equal(res.status, 200);
+    assert.match(fs.readFileSync(path.join(dir, 'rhyla-docs/body/checkout/review_order.md'), 'utf8'), /title: review order/);
+    assert.equal((await api('/page', 'POST', { slug: 'checkout/review_order' })).status, 409);
+    assert.equal((await api('/page', 'POST', { slug: 'zeta/custom' })).status, 409);
+    assert.equal((await api('/flow', 'PUT', { slug: 'zeta/custom', title: 'x', steps: [] })).status, 409);
+  });
+});
