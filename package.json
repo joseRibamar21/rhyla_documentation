@@ -1,6 +1,6 @@
 {
   "name": "rhyla",
-  "version": "1.0.7",
+  "version": "1.1.0",
   "description": "Simple, template-driven Markdown documentation generator (CLI)",
   "bin": {
     "rhyla": "./bin/cli.js"
@@ -47,13 +47,12 @@
     "./express": "./src/client/index.js"
   },
   "dependencies": {
-    "chalk": "^5.3.0",
-    "chokidar": "^4.0.3",
     "commander": "^11.1.0",
-    "cross-spawn": "^7.0.6",
     "express": "^4.18.2",
-    "glob": "^11.0.3",
     "gray-matter": "^4.0.3",
     "markdown-it": "^13.0.1"
+  },
+  "scripts": {
+    "test": "node --test"
   }
 }

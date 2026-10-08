@@ -8,7 +8,7 @@ The main idea is to allow developers to keep all project documentation organized
 ## 🚀 Motivation
 - Make it easy to create local and static documentation.
 - Use **Markdown** so content is easy to write and maintain.
-- Allow full customization of **header**, **footer**, **sidebar**, and **themes**.
+- Allow full customization of **header**, **sidebar**, and **themes**.
 - Provide a simple development (`rhyla dev`) and build (`rhyla build`) workflow.
 
 ---
@@ -21,7 +21,7 @@ The main idea is to allow developers to keep all project documentation organized
    ```
 This will create the initial structure with:
 - header.html
-- config.yaml
+- config.json
 - home.md (this page)
 - body folder for your topics
 
@@ -29,13 +29,13 @@ This will create the initial structure with:
    ```bash
    rhyla dev
    ```
-This will start a local server at `http://localhost:3000` for preview.
+This will start a local server at `http://localhost:3333` for preview.
 
 1. To generate static documentation, use:
    ```bash
    rhyla build
    ```
-This will create the `rhyla/` folder with the generated HTML files.
+This will create the `dist/` folder with the generated HTML files, plus `llms.txt` and a `.md` copy of each page for AI agents.
 
 ---
 
@@ -43,17 +43,17 @@ This will create the `rhyla/` folder with the generated HTML files.
 The first recommended action is to adapt this `home.md` to your project's context.
 
 ### How navigation is built
-The sidebar is automatically generated from the directory tree inside `rhyla/body/`:
+The sidebar is automatically generated from the directory tree inside `rhyla-docs/body/`:
 - Each FOLDER inside `body/` works as a GROUP / CATEGORY.
 - Each `.md` FILE becomes a processed page (Markdown → HTML).
 - Each `.html` FILE is included as-is (useful for highly customized pages).
-- The file path defines the route. Example: `rhyla/body/guides/install.md` → route `/guides/install`.
+- The file path defines the route. Example: `rhyla-docs/body/guides/install.md` → route `/guides/install`.
 - The default order is alphabetical (folder and file names). Use clear and consistent names.
 
 ### Creating groups and topics
 Example structure:
 ```
-rhyla/
+rhyla-docs/
   body/
     introduction.md
     quickstart.md
@@ -98,14 +98,13 @@ Generated routes:
 - Navigation and structure depend on using .md or .html files.
 - The sidebar is generated based on the folder structure, so folder and file names define groups and topics.
 - The system does not automatically process external links in the menu.
-- For global layout changes, you need to edit header.html, footer.html, and theme styles.
+- For global layout changes, edit `header.html` and the theme styles.
 - No plugin or extension support at the moment.
 
 ---
 
 ## 🔎 About Search and Indexing
-- All documentation pages (`.md` and `.html`) are automatically indexed and used in the search page (`/buscar`).
+- All documentation pages (`.md` and `.html`) are automatically indexed and used by the search panel (🔎 Search button).
 - The search system relies on this index to provide fast and relevant results.
-- For correct operation, **do not delete or rename the search page** (`search.html` in `rhyla/body`).
 - The `home.md` file is required and must not be deleted, as it is the main entry page of your documentation. You should edit it to fit your project, but never remove it.
 

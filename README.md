@@ -1,118 +1,165 @@
 # 📚 Rhyla Documentation
 
-**Rhyla Documentation** is a simple and flexible tool to quickly create and organize documentation using **Markdown** files and customizable templates.  
-The main idea is to allow developers to keep all project documentation organized, navigable, and with support for light and dark themes, without relying on heavy tools or complex configurations.
+**Rhyla** is a simple CLI that turns a folder of **Markdown** files into a documentation site with a folder-based sidebar, search, light/dark themes and a static build. It also publishes your docs in formats **AI agents** can read directly (`llms.txt`, per-page `.md`).
 
 ---
 
-## 🚀 Motivation
-- Make it easy to create local and static documentation.
-- Use **Markdown** so content is easy to write and maintain.
-- Allow full customization of **header**, **footer**, **sidebar**, and **themes**.
-- Provide a simple development (`rhyla dev`) and build (`rhyla build`) workflow.
+## 🛠 Usage
+
+```bash
+npx rhyla init    # creates rhyla-docs/
+npx rhyla dev     # preview at http://localhost:3333
+npx rhyla build   # static site in dist/
+npx rhyla serve   # build + serve dist/ under the configured base path
+npx rhyla mcp     # MCP server for AI agents (stdio)
+```
+
+| Command | Options |
+|---------|---------|
+| `init`  | `-f, --force` overwrite template files if `rhyla-docs/` already exists |
+| `dev`   | `-p, --port <port>` (default `3333`), `-H, --host <host>` (default `127.0.0.1`) |
+| `serve` | `-b, --base <base>`, `-p, --port <port>`, `-d, --dir <dir>`, `--no-build` |
+| `mcp`   | `-d, --dir <dir>` project root, `--read-only` |
+
+`rhyla init` creates:
+
+```
+rhyla-docs/
+  config.json     # site settings
+  header.html     # shared <head> and top bar
+  AGENTS.md       # authoring conventions for AI coding agents
+  styles/         # global.css, light.css, dark.css
+  public/         # static assets served at /public
+  body/           # your pages
+    home.md       # landing page (required)
+    notFound.html # 404 page
+```
 
 ---
 
-## 🛠 Basic Usage
-1. Install the project globally or use it via local CLI.
-2. Run:
-   ```bash
-   rhyla init
-   ```
-This will create the initial structure with:
-- header.html
-- config.yaml
-- home.md (this page)
-- body folder for your topics
+## ✏️ Writing pages
 
-1. During development, use:
-   ```bash
-   rhyla dev
-   ```
-This will start a local server at `http://localhost:3000` for preview.
+- Each **folder** in `body/` is a sidebar group; each **`.md`/`.html` file** is a page.
+- The file path is the route: `body/guide/install.md` → `/guide/install`.
+- `.md` is rendered from Markdown; `.html` is included as-is (scripts and `on*` attributes are stripped unless `allow_raw_html` is `true`).
 
-1. To generate static documentation, use:
-   ```bash
-   rhyla build
-   ```
-This will create the `rhyla/` folder with the generated HTML files.
+### Frontmatter
+
+```markdown
+---
+title: Install                       # sidebar label, <title>, search and llms.txt
+description: How to install the CLI  # <meta description> and llms.txt summary
+order: 1                             # sidebar order inside the folder (lower first)
+---
+```
+
+All fields are optional. Without `title`, the first `# H1` is used, then the file name. Without `order`, pages are sorted alphabetically after the ordered ones.
+
+### API pages
+
+The file name can carry an HTTP method and tags, rendered as badges in the sidebar: `post-create_user-new.md` → **POST** create user **new**. Methods: `get-`, `post-`, `put-`, `patch-`, `delete-`. Tags: `-new`, `-dep`, `-v1`, `-v1.2.0`…
+
+In `rhyla dev`, the **API Page Generator** at `/kit_dev_rhyla/new_rote` builds these pages from a form (it is never included in the build).
 
 ---
 
-## ✏️ Start customizing!
-The first recommended action is to adapt this `home.md` to your project's context.
+## ⚙️ config.json
 
-### How navigation is built
-The sidebar is automatically generated from the directory tree inside `rhyla/body/`:
-- Each FOLDER inside `body/` works as a GROUP / CATEGORY.
-- Each `.md` FILE becomes a processed page (Markdown → HTML).
-- Each `.html` FILE is included as-is (useful for highly customized pages).
-- The file path defines the route. Example: `rhyla/body/guides/install.md` → route `/guides/install`.
-- The default order is alphabetical (folder and file names). Use clear and consistent names.
-
-### Creating groups and topics
-Example structure:
-```
-rhyla/
-  body/
-    introduction.md
-    quickstart.md
-    guide/
-      install.md
-      config.md
-    api/
-      auth.md
-      users.html
-```
-Generated routes:
-```
-/introduction
-/quickstart
-/guide/install
-/guide/config
-/api/auth
-/api/users
+```json
+{
+  "title": "My Docs",
+  "description": "What this documentation is about",
+  "site_url": "https://docs.example.com",
+  "base": "/",
+  "side_topics": true,
+  "allow_raw_html": false,
+  "build_ignore": ["drafts", "*.draft.md"]
+}
 ```
 
-### Naming best practices
-- Use lowercase and hyphens or camelCase: `advanced-install.md` or `advancedInstall.md`.
-- Avoid spaces and special characters.
-- Choose short, descriptive, and stable names.
-
-### When to use .md or .html
-| Situation | Use .md | Use .html |
-|-----------|---------|-----------|
-| Common text, narrative docs | ✅ | |
-| Code with simple formatting | ✅ | |
-| Fully custom layout | | ✅ |
-| Ready-made HTML components | | ✅ |
-
-### Extra tips
-- Start simple: create just a few `.md` files and check the navigation.
-- Need a special page (internal landing)? Create a `.html` in that folder.
-- Restructuring? Just move/rename folders/files and restart the server (or reload) to reflect changes.
-
---- 
-
-## ⚠️ Limitations
-- Navigation and structure depend on using .md or .html files.
-- The sidebar is generated based on the folder structure, so folder and file names define groups and topics.
-- The system does not automatically process external links in the menu.
-- For global layout changes, you need to edit header.html, footer.html, and theme styles.
-- No plugin or extension support at the moment.
+| Key | Purpose |
+|-----|---------|
+| `title`, `description` | Site name and summary (page `<title>`, `llms.txt`) |
+| `site_url` | Public URL. Enables `sitemap.xml`, `robots.txt`, canonical links and absolute URLs in `llms.txt` |
+| `base` | Sub-path when hosted under a prefix, e.g. `/docs/` |
+| `side_topics` | "On this page" table of contents |
+| `allow_raw_html` | Allow raw HTML in `.md` and scripts in `.html` pages |
+| `build_ignore` | Names, paths or `*` patterns (relative to `body/`) left out of the build |
 
 ---
 
-## 🔎 About Search and Indexing
-- All documentation pages (`.md` and `.html`) are automatically indexed and used in the search page (`/buscar`).
-- The search system relies on this index to provide fast and relevant results.
-- For correct operation, **do not delete or rename the search page** (`search.html` in `rhyla/body`).
-- The `home.md` file is required and must not be deleted, as it is the main entry page of your documentation. You should edit it to fit your project, but never remove it.
+## 🤖 For AI agents
+
+`rhyla build` (and `rhyla dev`) publish, next to the HTML:
+
+| Path | Content |
+|------|---------|
+| `/llms.txt` | Index of every page with links and descriptions ([llmstxt.org](https://llmstxt.org)) |
+| `/llms-full.txt` | All pages concatenated as Markdown |
+| `/<route>.md` | Markdown source of each `.md` page (home is `/index.md`) |
+| `/search_index.json` | `[{ route, title, content }]` |
+
+Every HTML page also links its Markdown version with `<link rel="alternate" type="text/markdown">`.
+
+### MCP server
+
+`rhyla mcp` starts a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, so agents (Claude Code, Cursor, VS Code…) can work with the docs directly:
+
+| Tool | What it does |
+|------|--------------|
+| `list_pages` | All pages (route, title, description, file), optionally filtered by folder |
+| `search_docs` | Full-text search, case and accent insensitive |
+| `read_page` | Source of a page (Markdown with frontmatter) |
+| `get_conventions` | The project's `AGENTS.md` (layout, frontmatter, naming) |
+| `write_page` | Create or update a Markdown page inside `rhyla-docs/body` |
+
+Claude Code:
+
+```bash
+claude mcp add rhyla -- npx rhyla mcp
+```
+
+Other clients (`.mcp.json`, Cursor, VS Code):
+
+```json
+{
+  "mcpServers": {
+    "rhyla": { "command": "npx", "args": ["rhyla", "mcp"] }
+  }
+}
+```
+
+Options: `--dir <path>` (project root, default: current directory) and `--read-only` (no `write_page`).
+
+Agents that only edit files can follow `rhyla-docs/AGENTS.md`, which documents the layout, frontmatter and naming conventions.
+
+---
+
+## 🚀 Serving under Express
+
+```js
+import express from 'express';
+import RhylaClient from 'rhyla';
+
+const app = express();
+RhylaClient.expressConfig(app, '/docs'); // serves ./dist under /docs
+app.listen(3000);
+```
+
+---
+
+## 🧪 Development
+
+```bash
+npm install
+npm test
+```
 
 ---
 
 ## Contributing
-Contributions are welcome! Feel free to open issues or submit pull requests on the [GitHub repository](https://github.com/joseRibamar21/rhyla_documentation).
+
+Contributions are welcome! Open issues or pull requests on [GitHub](https://github.com/joseRibamar21/rhyla_documentation).
 
 <div align="left">
   <a href="https://github.com/joseRibamar21" target="_blank">
@@ -120,12 +167,6 @@ Contributions are welcome! Feel free to open issues or submit pull requests on t
   </a>
 </div>
 
---- 
-
 ## 📄 License
-This project is licensed under the MIT License. See the LICENSE file for more details.
 
---- 
-
-## 🔗 Project link
-[https://github.com/joseRibamar21/rhyla_documentation](https://github.com/joseRibamar21/rhyla_documentation)
+MIT. See [LICENCE](LICENCE).

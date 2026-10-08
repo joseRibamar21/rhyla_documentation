@@ -1,39 +1,63 @@
 #!/usr/bin/env node
+import { createRequire } from 'module';
 import { Command } from 'commander';
 import init from '../src/commands/init.js';
 import dev from '../src/commands/dev.js';
 import build from '../src/commands/build.js';
 import serve from '../src/commands/serve.js';
+import mcp from '../src/commands/mcp.js';
+
+const { version } = createRequire(import.meta.url)('../package.json');
+
+// Erros esperados (ex.: pasta ausente) viram mensagem + exit code 1, sem stack trace
+const run = (fn) => async (opts) => {
+  try {
+    await fn(opts);
+  } catch (err) {
+    console.error(`❌ ${err.message}`);
+    process.exit(1);
+  }
+};
 
 const program = new Command();
 
 program
   .name('rhyla')
   .description('Markdown documentation tool')
-  .version('1.0.0');
+  .version(version);
 
 program
   .command('init')
-  .description('Create base documentation structure')
-  .action(init);
+  .description('Create base documentation structure in rhyla-docs/')
+  .option('-f, --force', 'Overwrite template files if rhyla-docs/ already exists')
+  .action(run(init));
 
 program
   .command('dev')
   .description('Start local server for preview')
-  .action(dev);
+  .option('-p, --port <port>', 'Port to listen on', '3333')
+  .option('-H, --host <host>', 'Host to bind (use 0.0.0.0 to expose on the network)', '127.0.0.1')
+  .action(run(dev));
 
 program
   .command('build')
-  .description('Generate static HTML documentation')
-  .action(build);
+  .description('Generate static HTML documentation in dist/ (plus llms.txt and .md sources)')
+  .action(run(build));
 
 program
   .command('serve')
   .description('Serve dist under a base path (e.g., /docs)')
-  .option('-b, --base <base>', 'Base path (default from rhyla/config.json or /)')
+  .option('-b, --base <base>', 'Base path (default from rhyla-docs/config.json or /)')
   .option('-p, --port <port>', 'Port to listen on', '3333')
   .option('-d, --dir <dir>', 'Directory to serve (default: dist)', 'dist')
   .option('--no-build', 'Do not run build before serving')
-  .action((opts) => serve(opts));
+  .action(run(serve));
+
+program
+  .command('mcp')
+  .description('Start an MCP server (stdio) so AI agents can list, search, read and write docs')
+  .option('-d, --dir <dir>', 'Project root containing rhyla-docs/ (default: current directory)')
+  .option('--read-only', 'Expose only read tools (no write_page)')
+  .action(run(mcp));
 
 program.parse(process.argv);

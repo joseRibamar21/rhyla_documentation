@@ -1,35 +1,24 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import build from './build.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { DOCS_DIR, loadConfig, normalizeBase } from '../core/config.js';
 
 export default async function serve(opts = {}) {
   const root = process.cwd();
-  const rhylaPath = path.join(root, 'rhyla-docs'); // Alterado para rhyla-docs para evitar conflito
+  const rhylaPath = path.join(root, DOCS_DIR);
   const distDir = path.join(root, opts.dir || 'dist');
 
-  // Base path: --base CLI > rhyla/config.json base > '/'
-  let base = typeof opts.base === 'string' ? opts.base : '/';
-  try {
-    const cfgPath = path.join(rhylaPath, 'config.json');
-    if ((!base || base === '/' ) && fs.existsSync(cfgPath)) {
-      const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-      if (cfg && typeof cfg.base === 'string' && cfg.base.trim()) base = cfg.base.trim();
-    }
-  } catch { /* ignore */ }
-  if (!base.startsWith('/')) base = '/' + base;
-  if (!base.endsWith('/')) base += '/';
+  // Base path: --base CLI > rhyla-docs/config.json base > '/'
+  const base = typeof opts.base === 'string' && opts.base !== '/'
+    ? normalizeBase(opts.base)
+    : loadConfig(rhylaPath).base;
 
   // Build (unless disabled with --no-build)
   if (opts.build !== false) {
     await build();
   } else if (!fs.existsSync(distDir)) {
-    console.error('❌ dist not found. Run `rhyla build` or omit --no-build.');
-    process.exit(1);
+    throw new Error('dist not found. Run `rhyla build` or omit --no-build.');
   }
 
   const app = express();

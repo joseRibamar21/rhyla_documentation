@@ -1,51 +1,29 @@
 import fs from 'fs';
 import path from 'path';
+import { createIgnoreMatcher } from '../core/ignore.js';
+import { readFrontmatter, escapeHtml } from '../core/content.js';
+import { sortByOrder } from '../core/pages.js';
 
 export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = null, options = {}) {
-  const INDENT = 20; // px por nível de profundidade
+  const CHEVRON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>';
+  const HOME_ICON = '<svg class="rh-sidebar-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>';
   const isFileTopic = (name) => /\.(md|html)$/i.test(name);
   const isHiddenSpecial = (name) => ['home.md','home.html','notfound.md','notfound.html'].includes(name.toLowerCase());
   const isDir = (full) => fs.existsSync(full) && fs.statSync(full).isDirectory();
 
   // Suporte a padrões de ignore vindos do build (relativos a body/)
-  const inputIgnore = Array.isArray(options.ignore) ? options.ignore.slice() : [];
-  const ignorePatterns = inputIgnore
-    .map((p) => String(p).replace(/^\/+|\/+$/g, ''))
-    .filter(Boolean)
-    .map((p) => p.toLowerCase());
+  const shouldIgnorePath = createIgnoreMatcher(Array.isArray(options.ignore) ? options.ignore : []);
 
-  function patternToRegex(pat) {
-    const escaped = pat
-      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*/g, '.*');
-    return new RegExp('^' + escaped + '$', 'i');
-  }
+  // Ordena por `order` do frontmatter e depois por nome
+  const sortFiles = (dirAbs, names) =>
+    sortByOrder(names.map((name) => ({ name, order: readFrontmatter(path.join(dirAbs, name)).order })))
+      .map((e) => e.name);
 
-  const ignoreRegexes = ignorePatterns
-    .filter((p) => p.includes('*') || p.includes('/'))
-    .map((p) => patternToRegex(p));
-
-  const ignoreNames = new Set(
-    ignorePatterns.filter((p) => !p.includes('/') && !p.includes('*'))
-  );
-
-  function shouldIgnorePath(relPosix) {
-    if (!relPosix) return false;
-    const relLower = relPosix.toLowerCase();
-    const baseName = relLower.split('/').pop();
-    if (ignoreNames.has(baseName)) return true;
-    // diretório/prefixo sem '*'
-    for (const pat of ignorePatterns) {
-      if (!pat.includes('*')) {
-        const dirPat = pat.replace(/\/$/, '');
-        if (relLower === dirPat || relLower.startsWith(dirPat + '/')) return true;
-      }
-    }
-    for (const rx of ignoreRegexes) {
-      if (rx.test(relLower)) return true;
-    }
-    return false;
-  }
+  // Rótulo: `title` do frontmatter (escapado) ou o nome do arquivo
+  const labelFor = (fileAbs, fallback) => {
+    const title = readFrontmatter(fileAbs).title;
+    return title ? escapeHtml(title) : String(fallback).replace(/_/g, ' ');
+  };
 
   const rootEntries = fs.readdirSync(bodyPath);
   const rootTopics = rootEntries
@@ -54,8 +32,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       return fs.statSync(full).isFile() && isFileTopic(name);
     })
     .filter(name => !isHiddenSpecial(name))
-    .filter(name => !shouldIgnorePath(name))
-    .map(f => path.basename(f, path.extname(f)));
+    .filter(name => !shouldIgnorePath(name));
 
   const methodOf = (topic) => {
     const m = String(topic).toLowerCase();
@@ -126,11 +103,12 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
 
   let html = `<aside class="rhyla-sidebar"><ul>`;
 
-  // 🏠 Home - usando caminho relativo para evitar duplicação de prefixo
-  html += `<li class="item-sidebar ${activeTopic === 'home' ? 'active' : ''}"><a href="./">🏠 Home</a></li>`;
+  // Home - usando caminho relativo para evitar duplicação de prefixo
+  html += `<li class="item-sidebar ${activeTopic === 'home' ? 'active' : ''}"><a href="./">${HOME_ICON}Home</a></li>`;
 
   // Páginas raiz (exceto Search e Home)
-  for (const topic of rootTopics.sort()) {
+  for (const fileName of sortFiles(bodyPath, rootTopics)) {
+    const topic = path.basename(fileName, path.extname(fileName));
     if (topic.toLowerCase() === 'search' || topic.toLowerCase() === 'home') continue;
     const isActive = !activeGroup && activeTopic === topic;
     const method = methodOf(topic);
@@ -143,8 +121,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       const dashIdx = baseTopic.indexOf('-');
       label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1) : baseTopic;
     }
-    // Apenas para visualização: substituir '_' por ' '
-    label = String(label).replace(/_/g, ' ');
+    label = labelFor(path.join(bodyPath, fileName), label);
     
     // Para páginas raiz, não adicionamos o '|'
     const displayContent = tagHTML(method, label, postTag, getPostTag(topic).tagType);
@@ -155,7 +132,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
   function renderDir(dirAbs, relUrl = '', depth = 0) {
     // Arquivos diretos neste diretório
     const entries = fs.readdirSync(dirAbs);
-    const files = entries.filter(name => isFileTopic(name) && !isHiddenSpecial(name)).sort();
+    const files = sortFiles(dirAbs, entries.filter(name => isFileTopic(name) && !isHiddenSpecial(name)));
     const dirs = entries.filter(name => isDir(path.join(dirAbs, name))).sort();
 
     // Função auxiliar para normalizar caminhos e evitar duplicações
@@ -194,13 +171,9 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
           const dashIdx = baseTopic.indexOf('-');
           label = dashIdx !== -1 ? baseTopic.slice(dashIdx + 1) : baseTopic;
         }
-        // Apenas para visualização: substituir '_' por ' '
-        label = String(label).replace(/_/g, ' ');
+        label = labelFor(path.join(dirAbs, file), label);
         
-        // Para arquivos em subdiretórios, adicionamos o '|' antes do tópico se não houver método HTTP
-        const prefix = method ? 
-          tagHTML(method, label, postTag, getPostTag(topic).tagType) : 
-          tagHTML(null, '| ' + label, postTag, getPostTag(topic).tagType);
+        const prefix = tagHTML(method, label, postTag, getPostTag(topic).tagType);
           
         // Construímos caminhos relativos corretos para os tópicos dentro de diretórios
         const normalizedPath = normalizePath(relUrl);
@@ -216,18 +189,14 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       if (shouldIgnorePath(childRel)) continue;
       const ag = activeGroup || '';
       const isOpen = ag === childRel || ag.startsWith(childRel + '/'); // abre ancestrais
-      const padHeader = depth * INDENT; // pasta atual
-      const padContent = (depth + 0.3) * INDENT; // conteúdo dentro da pasta
   // Exibir nome da pasta sem underscores (visual apenas)
   const displayDir = String(d).replace(/_/g, ' ');
-  // Ícone especial para pasta de desenvolvimento
-  const dirIcon = String(d).toLowerCase() === 'kit_dev_rhyla' ? '⚙️' : '📁';
       html += `
         <li class="group ${isOpen ? 'open' : ''}">
-          <div class="group-header" style="padding-left:${padHeader}px;" onclick="toggleFolder(this)">
-    <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> ${dirIcon} ${displayDir}
+          <div class="group-header" onclick="toggleFolder(this)">
+    <span class="dropdown-arrow ${isOpen ? 'open' : ''}">${CHEVRON}</span>${escapeHtml(displayDir)}
           </div>
-          <ul class="group-content" style="max-height:0; padding-left:${padContent}px;">
+          <ul class="group-content" style="max-height:0;">
       `;
       renderDir(dirPath, childRel, depth + 0.3);
       html += `</ul></li>`;
@@ -240,7 +209,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
   // Footer estático no final da sidebar
   const footer = `
   <footer class="rhyla-footer">
-    <p style="margin:0;font-size:13px;color:var(--rh-muted);">&copy; 2025 - Made with Rhyla</p>
+    <p style="margin:0;font-size:13px;color:var(--rh-muted);">&copy; ${new Date().getFullYear()} - Made with Rhyla</p>
   </footer>`;
 
   html += `</ul>${footer}</aside>`;
