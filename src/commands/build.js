@@ -8,6 +8,7 @@ import { createMarkdown, sanitizeHtml } from '../core/content.js';
 import { collectPages } from '../core/pages.js';
 import { buildSearchIndex, buildLlmsTxt, buildLlmsFullTxt } from '../core/artifacts.js';
 import { applyPageMeta, assemblePage } from '../core/layout.js';
+import { buildFlowGraph, decoratePage } from '../core/flows.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -275,7 +276,14 @@ export default function build(opts = {}) {
     fs.writeFileSync(out, content, 'utf8');
   };
 
-  const pages = collectPages(bodyPath, { md, allowRawHtml, isIgnored });
+  const sourcePages = collectPages(bodyPath, { md, allowRawHtml, isIgnored });
+
+  // Fluxos: diagrama nas páginas de fluxo e navegação nas páginas que participam deles
+  const flowGraph = buildFlowGraph(sourcePages);
+  flowGraph.warnings.forEach((w) => console.warn(`⚠️  ${w}`));
+  const hrefFor = (slug) => (slug === 'home' ? '/' : `/${slug}.html`);
+  const mdHrefFor = (slug) => urlFor(slug === 'home' ? 'index.md' : `${slug}.md`);
+  const pages = sourcePages.map((p) => ({ ...p, ...decoratePage(p, flowGraph, { hrefFor, mdHrefFor }) }));
   // Caminhos relativos com .html, para o sitemap
   const sitemapPaths = [];
 
@@ -330,7 +338,7 @@ export default function build(opts = {}) {
   ));
 
   // Índice de busca (consumido pelo search-runtime no navegador)
-  const searchIndex = buildSearchIndex(pages);
+  const searchIndex = buildSearchIndex(sourcePages);
   writeFile('search_index.json', JSON.stringify(searchIndex));
   writeFile('scripts/search_index.json', JSON.stringify(searchIndex));
   writeFile('scripts/search_index.js', `window.__SEARCH_INDEX__ = ${JSON.stringify(searchIndex)};`);
@@ -352,6 +360,6 @@ export default function build(opts = {}) {
     log(`ℹ️  site_url missing in ${DOCS_DIR}/config.json. Set "site_url" to generate sitemap.xml, robots.txt and absolute URLs.`);
   }
 
-  log(`✅ Build completed: ${pages.length} pages → dist/ (search index, llms.txt, llms-full.txt, .md sources)`);
+  log(`✅ Build completed: ${pages.length} pages${flowGraph.flows.length ? `, ${flowGraph.flows.length} flows` : ''} → dist/ (search index, llms.txt, llms-full.txt, .md sources)`);
   return { distPath, pages: pages.length };
 }

@@ -11,6 +11,7 @@ import { createMarkdown, renderFile } from '../src/core/content.js';
 import { listPages, resolvePageFile } from '../src/core/pages.js';
 import { applyPageMeta, assemblePage } from '../src/core/layout.js';
 import { createMcpServer } from '../src/commands/mcp.js';
+import { buildFlowGraph, layoutFlow, decoratePage } from '../src/core/flows.js';
 
 function tmpProject() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhyla-test-'));
@@ -240,7 +241,7 @@ describe('mcp server', () => {
 
   test('lists the tools, without write_page when read-only', () => {
     const names = server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' }).result.tools.map((t) => t.name);
-    assert.deepEqual(names, ['list_pages', 'read_page', 'search_docs', 'get_conventions', 'write_page']);
+    assert.deepEqual(names, ['list_pages', 'read_page', 'search_docs', 'get_flow', 'get_conventions', 'write_page']);
     const ro = createMcpServer({ cwd: dir, readOnly: true });
     assert.ok(!ro.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' }).result.tools.some((t) => t.name === 'write_page'));
   });
@@ -293,5 +294,78 @@ describe('mcp server', () => {
     child.kill();
     assert.equal(lines[0].result.serverInfo.name, 'rhyla');
     assert.equal(lines[1].result.structuredContent.results[0].route, '/zeta/b-second');
+  });
+});
+
+describe('flows', () => {
+  const page = (slug, data = {}, extra = {}) => ({ slug, data, title: data.title || slug, description: '', html: `<h1>${slug}</h1>`, markdown: `# ${slug}`, ...extra });
+  const flowPage = (steps, extra = {}) => page('flows/demo', { title: 'Demo', type: 'flow', steps, ...extra });
+  const links = { hrefFor: (s) => `/${s}.html`, mdHrefFor: (s) => `/${s}.md` };
+
+  test('builds the graph and reports problems', () => {
+    const graph = buildFlowGraph([
+      page('a'), page('b'),
+      flowPage([
+        { id: 'one', page: 'a', next: [{ to: 'two', label: 'ok' }, { to: 'ghost' }] },
+        { id: 'two', page: 'missing/page' },
+        { id: 'one', title: 'dup' },
+      ]),
+    ]);
+    const [flow] = graph.flows;
+    assert.equal(flow.steps.length, 3);
+    assert.deepEqual(flow.steps[0].next, [{ to: 'two', label: 'ok' }]);
+    assert.ok(flow.steps[1].missingPage);
+    assert.equal(graph.warnings.length, 3);
+    assert.ok(graph.byPage.get('a'));
+  });
+
+  test('connects steps in order when no step uses next', () => {
+    const { flows } = buildFlowGraph([page('a'), page('b'), flowPage(['a', 'b'])]);
+    assert.deepEqual(flows[0].steps.map((s) => s.next.map((n) => n.to)), [['b'], []]);
+  });
+
+  test('layout ranks steps and detects loops', () => {
+    const { flows } = buildFlowGraph([flowPage([
+      { id: 'a', next: ['b', 'c'] }, { id: 'b', next: 'c' }, { id: 'c', next: 'a' },
+    ])]);
+    const layout = layoutFlow(flows[0]);
+    assert.deepEqual(['a', 'b', 'c'].map((id) => layout.nodes.get(id).rank), [0, 1, 2]);
+    assert.deepEqual(layout.backEdges.map((e) => `${e.from}>${e.to}`), ['c>a']);
+    assert.ok(layout.edges.find((e) => e.from === 'a' && e.to === 'c').skip);
+  });
+
+  test('decorates flow pages and member pages', () => {
+    const pages = [page('a'), page('b'), flowPage([{ id: 'x', page: 'a', next: { to: 'y', label: 'go' } }, { id: 'y', page: 'b' }])];
+    const graph = buildFlowGraph(pages);
+    const flow = decoratePage(pages[2], graph, links);
+    assert.match(flow.html, /<svg class="rh-flow-svg"/);
+    assert.match(flow.html, /href="\/a\.html"/);
+    assert.match(flow.markdown, /## Flow steps/);
+    const member = decoratePage(pages[0], graph, links);
+    assert.match(member.html, /Part of the flow/);
+    assert.match(member.html, /is-current/);
+    assert.match(member.markdown, /Next: b \(go\)/);
+    assert.equal(decoratePage(page('z'), graph, links).html, '<h1>z</h1>');
+  });
+
+  test('build renders the template flow without warnings', () => {
+    const dir = tmpProject();
+    build({ cwd: dir, quiet: true });
+    const flowHtml = fs.readFileSync(path.join(dir, 'dist/flows/publish_docs.html'), 'utf8');
+    assert.match(flowHtml, /rh-flow-svg/);
+    assert.doesNotMatch(flowHtml, /rh-flow-warnings/);
+    const member = fs.readFileSync(path.join(dir, 'dist/clients/express-v1.html'), 'utf8');
+    assert.match(member, /Part of the flow/);
+    assert.match(fs.readFileSync(path.join(dir, 'dist/flows/publish_docs.md'), 'utf8'), /## Flow steps/);
+  });
+
+  test('mcp get_flow lists and reads flows', () => {
+    const dir = tmpProject();
+    const server = createMcpServer({ cwd: dir });
+    const call = (args) => JSON.parse(server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_flow', arguments: args } }).result.content[0].text);
+    assert.deepEqual(call({}).flows.map((f) => f.route), ['/flows/publish_docs']);
+    const flow = call({ route: '/flows/publish_docs' });
+    assert.equal(flow.steps[0].page, '/guide/guide-en');
+    assert.deepEqual(flow.steps.find((s) => s.id === 'api').next.map((n) => n.label), ['yes', 'no']);
   });
 });

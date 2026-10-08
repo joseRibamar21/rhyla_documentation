@@ -39,6 +39,7 @@ export default function init(opts = {}) {
   copy('clients', 'body/clients');
   copy('guide', 'body/guide');
   copy('kit_dev_rhyla', 'body/kit_dev_rhyla');
+  copy('flows', 'body/flows');
 
   log(`✅ Project initialized in ${DOCS_DIR}/`);
   log('   Next: "rhyla dev" to preview, "rhyla build" to generate dist/.');

@@ -42,6 +42,39 @@ Content…
 
 If `title` is set and the page has no `# H1`, Rhyla renders the title as the H1.
 
+## Flows
+
+A **flow** connects pages into a process (user journeys, API call sequences, troubleshooting trees). It is a normal Markdown page with `type: flow` and a `steps` list in the frontmatter:
+
+```markdown
+---
+title: Checkout
+description: From the cart to a confirmed order.
+type: flow
+steps:
+  - id: cart                       # unique id inside the flow
+    page: api/cart/get-cart        # page path inside body/, without extension
+    next: pay                      # one step id…
+  - id: pay
+    page: api/payments/post-pay
+    next:                          # …or several, with labels for branches
+      - { to: done, label: approved }
+      - { to: declined, label: declined }
+  - id: done
+    page: checkout/confirmation    # no `next`: end of the flow
+  - id: declined
+    title: Payment declined        # a step without `page` is a text/decision node
+    note: show reason, try again   # short subtitle (defaults to the page description)
+    next: { to: pay, label: retry }  # loops are allowed
+---
+
+Free text about the flow.
+```
+
+- If no step has `next`, steps are connected in the order they are listed.
+- Rhyla draws the diagram, adds "previous / next" navigation to every page in the flow and warns about unknown pages or step ids.
+- Keep flows in a `flows/` folder so they are grouped in the sidebar.
+
 ## API endpoint pages
 
 The file name carries the HTTP method and optional tags, shown as badges in the sidebar:
@@ -100,7 +133,7 @@ npx rhyla build   # static site in dist/
 
 ## MCP
 
-If the `rhyla` MCP server is connected (`rhyla mcp`), prefer its tools: `search_docs` / `list_pages` to find pages, `read_page` to read, `write_page` to create or update.
+If the `rhyla` MCP server is connected (`rhyla mcp`), prefer its tools: `search_docs` / `list_pages` to find pages, `read_page` to read, `get_flow` to read flows, `write_page` to create or update.
 
 ## Machine-readable output
 

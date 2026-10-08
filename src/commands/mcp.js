@@ -7,6 +7,7 @@ import { DOCS_DIR, loadConfig } from '../core/config.js';
 import { createIgnoreMatcher } from '../core/ignore.js';
 import { createMarkdown, renderFile, stripHtml } from '../core/content.js';
 import { listPages, loadPage, resolvePageFile } from '../core/pages.js';
+import { buildFlowGraph } from '../core/flows.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const { version } = createRequire(import.meta.url)('../../package.json');
@@ -18,7 +19,7 @@ const PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05
 const DEFAULT_IGNORE = ['kit_dev_rhyla'];
 
 const INSTRUCTIONS = `Rhyla documentation for this project lives in ${DOCS_DIR}/body as Markdown files; the file path is the route.
-Use search_docs or list_pages to find pages and read_page to read one.
+Use search_docs or list_pages to find pages and read_page to read one. Flows (type: flow) connect pages into processes; read them with get_flow.
 Before writing, call get_conventions once (frontmatter, naming, API page format), then use write_page.`;
 
 class ToolError extends Error {}
@@ -60,9 +61,12 @@ export function createMcpServer(opts = {}) {
       route: page.route,
       title: page.title,
       description: page.description || undefined,
+      type: page.data && page.data.type === 'flow' ? 'flow' : undefined,
       file: relFile(page.file),
     };
   }
+
+  const routeOf = (slug) => (slug === 'home' ? '/' : `/${slug}`);
 
   const tools = [
     {
@@ -154,6 +158,51 @@ export function createMcpServer(opts = {}) {
         results.sort((a, b) => b.score - a.score);
         const top = results.slice(0, Math.min(Math.max(Number(limit) || 10, 1), 50));
         return { data: { query, total: results.length, results: top } };
+      },
+    },
+    {
+      name: 'get_flow',
+      title: 'Read a flow',
+      description: 'Flows connect pages into a process (steps, branches, loops). Without a route, lists all flows; with a route, returns its steps, the page of each step and the transitions between them.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          route: { type: 'string', description: 'Route of the flow page, e.g. "/flows/checkout". Omit to list flows.' },
+        },
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+      run({ route }) {
+        requireProject();
+        const ctx = context();
+        const pages = listPages(bodyPath, { isIgnored: ctx.isIgnored }).map((p) => loadPage(p, ctx));
+        const graph = buildFlowGraph(pages);
+        if (!route) {
+          return {
+            data: {
+              count: graph.flows.length,
+              flows: graph.flows.map((f) => ({ route: routeOf(f.slug), title: f.title, steps: f.steps.length })),
+            },
+          };
+        }
+        const slug = String(route).replace(/^\/+|\/+$/g, '').replace(/\.(md|html)$/i, '') || 'home';
+        const flow = graph.flows.find((f) => f.slug === slug);
+        if (!flow) throw new ToolError(`No flow at ${route}. Call get_flow without arguments to list flows.`);
+        return {
+          data: {
+            route: routeOf(flow.slug),
+            title: flow.title,
+            start: flow.start,
+            steps: flow.steps.map((st) => ({
+              id: st.id,
+              title: st.title,
+              page: st.slug ? routeOf(st.slug) : null,
+              note: st.note || undefined,
+              next: st.next,
+            })),
+            warnings: flow.warnings.length ? flow.warnings : undefined,
+          },
+        };
       },
     },
     {

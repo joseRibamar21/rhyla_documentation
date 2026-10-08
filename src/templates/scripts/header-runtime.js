@@ -123,6 +123,14 @@
   }
   onReady(() => addCopyButtons(document));
 
+  // Diagramas de fluxo mais largos que a tela abrem centralizados
+  function centerFlows(root) {
+    (root || document).querySelectorAll('.rh-flow').forEach((el) => {
+      if (el.scrollWidth > el.clientWidth) el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
+    });
+  }
+  onReady(() => centerFlows(document));
+
   // Estado de configuração
   let RHYLA_CFG = { side_topics: false };
 
@@ -146,8 +154,9 @@
 
   // Navegação SPA leve: intercepta links internos e troca apenas o <main>
   function isInternalNavigable(a) {
-    if (!a || a.target === '_blank') return false;
-    const url = new URL(a.href, location.origin);
+    if (!a || a.getAttribute('target') === '_blank') return false;
+    // getAttribute funciona também em <a> dentro de SVG (diagramas de fluxo)
+    const url = new URL(a.getAttribute('href') || '', location.href);
     if (url.origin !== location.origin) return false;
     const p = url.pathname;
   const excludes = [/\.(css|js|json|png|jpe?g|svg|gif|webp|ico|pdf|zip)(\?|#|$)/i, /^\/public\//, /^\/styles\//, /^\/scripts\//];
@@ -354,6 +363,7 @@
     if (newUrl && doPush) history.pushState({}, '', newUrl);
     setNavOpen(false);
     addCopyButtons(main);
+    centerFlows(main);
     fixSidebarLinks();
     updateActiveSidebar(newUrl || location.pathname);
     

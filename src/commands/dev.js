@@ -8,6 +8,7 @@ import { createMarkdown, renderFile } from "../core/content.js";
 import { collectPages, resolvePageFile } from "../core/pages.js";
 import { buildSearchIndex, buildLlmsTxt, buildLlmsFullTxt } from "../core/artifacts.js";
 import { applyPageMeta, assemblePage } from "../core/layout.js";
+import { buildFlowGraph, decoratePage } from "../core/flows.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -102,6 +103,17 @@ export default function dev(opts = {}) {
   };
   const allPages = (ctx) => collectPages(bodyPath, ctx);
 
+  // Fluxos: o grafo é recalculado a cada requisição (reflete edições na hora)
+  const flowLinks = {
+    hrefFor: (slug) => (slug === "home" ? "/" : `/${slug}.html`),
+    mdHrefFor: (slug) => `/${slug === "home" ? "index" : slug}.md`,
+  };
+  const withFlows = (pages) => {
+    const graph = buildFlowGraph(pages);
+    return pages.map((p) => ({ ...p, ...decoratePage(p, graph, flowLinks) }));
+  };
+  const decorateOne = (ctx, page, slug) => decoratePage({ ...page, slug }, buildFlowGraph(allPages(ctx)), flowLinks);
+
   const app = express();
   app.use(express.json({ limit: "2mb" }));
 
@@ -126,7 +138,7 @@ export default function dev(opts = {}) {
   app.get(["/llms.txt", "/llms-full.txt"], (req, res) => {
     const ctx = context();
     const options = { title: ctx.config.title, description: ctx.config.description, urlFor: (rel) => "/" + rel };
-    const pages = allPages(ctx);
+    const pages = withFlows(allPages(ctx));
     res.type("text/plain; charset=utf-8");
     res.send(req.path === "/llms.txt" ? buildLlmsTxt(pages, options) : buildLlmsFullTxt(pages, options));
   });
@@ -136,7 +148,7 @@ export default function dev(opts = {}) {
     const resolved = resolvePageFile(bodyPath, req.path.replace(/\.md$/i, ""));
     if (!resolved || !resolved.file.endsWith(".md")) return next();
     const ctx = context();
-    const page = renderFile(resolved.file, ctx);
+    const page = decorateOne(ctx, renderFile(resolved.file, ctx), resolved.slug);
     res.type("text/markdown; charset=utf-8").send(page.markdown);
   });
 
@@ -194,10 +206,11 @@ export default function dev(opts = {}) {
     const sidebar = isHome
       ? generateSidebarHTML(bodyPath, null, "home")
       : generateSidebarHTML(bodyPath, resolved.group, resolved.topic);
-    res.send(assemblePage(header, sidebar, page.html));
+    const content = isDevKit ? page.html : decorateOne(ctx, page, resolved.slug).html;
+    res.send(assemblePage(header, sidebar, content));
   });
 
-  const port = Number(opts.port || process.env.PORT || 3333);
+  const port = Number(opts.port ?? process.env.PORT ?? 3333);
   // Por padrão só escuta em localhost: o dev server consegue gravar arquivos em body/
   const host = opts.host || "127.0.0.1";
   return app.listen(port, host, () => {

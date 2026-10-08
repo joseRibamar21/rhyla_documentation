@@ -55,6 +55,28 @@ order: 1                             # sidebar order inside the folder (lower fi
 
 All fields are optional. Without `title`, the first `# H1` is used, then the file name. Without `order`, pages are sorted alphabetically after the ordered ones.
 
+### Flows
+
+A flow connects pages into a process (user journeys, API call sequences, troubleshooting trees). It is a page with `type: flow` and a list of `steps`:
+
+```markdown
+---
+title: Checkout
+type: flow
+steps:
+  - { id: cart, page: api/cart/get-cart, next: pay }
+  - id: pay
+    page: api/payments/post-pay
+    next:
+      - { to: done, label: approved }
+      - { to: declined, label: declined }
+  - { id: done, page: checkout/confirmation }
+  - { id: declined, title: Payment declined, next: { to: pay, label: retry } }
+---
+```
+
+Rhyla draws the diagram (clickable steps, branches and loops), adds previous/next navigation and a mini-map to every page in the flow, and lists the steps in the `.md` output for agents. Steps without `page` are text or decision nodes. `rhyla init` includes an example in `body/flows/`.
+
 ### API pages
 
 The file name can carry an HTTP method and tags, rendered as badges in the sidebar: `post-create_user-new.md` → **POST** create user **new**. Methods: `get-`, `post-`, `put-`, `patch-`, `delete-`. Tags: `-new`, `-dep`, `-v1`, `-v1.2.0`…
@@ -110,6 +132,7 @@ Every HTML page also links its Markdown version with `<link rel="alternate" type
 | `list_pages` | All pages (route, title, description, file), optionally filtered by folder |
 | `search_docs` | Full-text search, case and accent insensitive |
 | `read_page` | Source of a page (Markdown with frontmatter) |
+| `get_flow` | Lists flows, or the steps and transitions of one flow |
 | `get_conventions` | The project's `AGENTS.md` (layout, frontmatter, naming) |
 | `write_page` | Create or update a Markdown page inside `rhyla-docs/body` |
 
