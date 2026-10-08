@@ -180,6 +180,12 @@ npm test
 
 ---
 
+## 🗺️ Roadmap
+
+Flow editor, Notion-like page editor and more: see [ROADMAP.md](ROADMAP.md).
+
+---
+
 ## Contributing
 
 Contributions are welcome! Open issues or pull requests on [GitHub](https://github.com/joseRibamar21/rhyla_documentation).
