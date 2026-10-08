@@ -1,29 +1,43 @@
 import fs from 'fs';
 import path from 'path';
-import markdownIt from 'markdown-it';
-import { generateSidebarHTML } from '../utils/sidebar.js';
-import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { generateSidebarHTML } from '../utils/sidebar.js';
+import { DOCS_DIR, loadConfig } from '../core/config.js';
+import { createIgnoreMatcher } from '../core/ignore.js';
+import { createMarkdown, sanitizeHtml } from '../core/content.js';
+import { collectPages } from '../core/pages.js';
+import { buildSearchIndex, buildLlmsTxt, buildLlmsFullTxt } from '../core/artifacts.js';
+import { applyPageMeta, assemblePage } from '../core/layout.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Pastas sempre ignoradas no build (kit de desenvolvimento só faz sentido no `rhyla dev`)
+const DEFAULT_IGNORE = ['kit_dev_rhyla'];
 
-
-export default function build() {
-
-  
-  const root = process.cwd();
-  const rhylaPath = path.join(root, 'rhyla-docs'); // Alterado para rhyla-docs para evitar conflito
+/**
+ * Gera o site estático em dist/.
+ * @param {{ cwd?: string, quiet?: boolean }} opts
+ * @returns {{ distPath: string, pages: number }}
+ */
+export default function build(opts = {}) {
+  const root = opts.cwd || process.cwd();
+  const rhylaPath = path.join(root, DOCS_DIR);
   const distPath = path.join(root, 'dist');
   const templatesPath = path.join(__dirname, '../templates');
+  const log = opts.quiet ? () => {} : console.log;
 
   if (!fs.existsSync(rhylaPath)) {
-    console.error('❌ Folder "rhyla" not found. Please run "rhyla init" first.');
-    process.exit(1);
+    throw new Error(`Folder "${DOCS_DIR}" not found. Run "rhyla init" first.`);
   }
 
-  // markdown-it will be instantiated after reading config so we can control html option
+  const config = loadConfig(rhylaPath);
+  const basePath = config.base;
+  const siteUrl = config.siteUrl;
+  const allowRawHtml = config.allowRawHtml;
+  const ignorePatterns = [...new Set([...DEFAULT_IGNORE, ...config.buildIgnore])];
+  const isIgnored = createIgnoreMatcher(ignorePatterns);
+  const md = createMarkdown({ allowRawHtml });
 
   // Limpar dist e recriar
   if (fs.existsSync(distPath)) fs.rmSync(distPath, { recursive: true });
@@ -35,67 +49,19 @@ export default function build() {
 
   // Copiar assets públicos do usuário (imagens, fontes, logo, etc.)
   const publicSrc = path.join(rhylaPath, 'public');
-  const publicDst = path.join(distPath, 'public');
   if (fs.existsSync(publicSrc)) {
-    fs.mkdirSync(publicDst, { recursive: true });
-    fs.cpSync(publicSrc, publicDst, { recursive: true });
+    fs.cpSync(publicSrc, path.join(distPath, 'public'), { recursive: true });
   }
 
-  // Pasta de scripts agora é templates/scripts
+  // Copiar scripts de runtime do navegador
   const scriptsSrc = path.join(templatesPath, 'scripts');
-  const searchScript = path.join(scriptsSrc, 'generateSearchIndex.js');
-
-  // Copiar scripts para o build (necessário para header-runtime.js em produção)
   const scriptsDst = path.join(distPath, 'scripts');
-  if (fs.existsSync(scriptsSrc)) {
-    fs.mkdirSync(scriptsDst, { recursive: true });
-    fs.cpSync(scriptsSrc, scriptsDst, { recursive: true });
-  }
-  
-  // Moveremos a geração do índice de busca para depois do processamento de arquivos
-  // e aplicação de regras de exclusão
+  fs.cpSync(scriptsSrc, scriptsDst, { recursive: true });
 
-  // Copiar config.json para dist e ler basePath se definido
-  const cfgSrc = path.join(rhylaPath, 'config.json');
-  const cfgDst = path.join(distPath, 'config.json');
-  let basePath = '/';
-  let siteUrl = null; // URL pública do site, ex: https://docs.example.com
-  // Lista de ignorados configurável
-  /** @type {string[]} */
-  let buildIgnore = [];
-  if (fs.existsSync(cfgSrc)) {
-    fs.copyFileSync(cfgSrc, cfgDst);
-    try {
-      const cfgObj = JSON.parse(fs.readFileSync(cfgSrc, 'utf8'));
-      if (cfgObj && typeof cfgObj.base === 'string' && cfgObj.base.trim()) {
-        basePath = cfgObj.base.trim();
-      }
-      if (cfgObj && typeof cfgObj.site_url === 'string' && cfgObj.site_url.trim()) {
-        siteUrl = cfgObj.site_url.trim();
-      }
-      // Lê lista de arquivos/pastas a ignorar durante o build
-      if (cfgObj && Array.isArray(cfgObj.build_ignore)) {
-        buildIgnore = cfgObj.build_ignore.filter((s) => typeof s === 'string');
-      }
-    } catch (_) { /* ignore parse errors */ }
-  }
-  // Normaliza basePath
-  if (!basePath.startsWith('/')) basePath = '/' + basePath;
-  if (!basePath.endsWith('/')) basePath += '/';
+  // Copiar config.json (lido pelo header-runtime no navegador)
+  if (fs.existsSync(config.file)) fs.copyFileSync(config.file, path.join(distPath, 'config.json'));
 
-  // Ler opção de segurança: permitir HTML cru em .md/.html por configuração
-  let allowRawHtml = false;
-  try {
-    if (fs.existsSync(cfgSrc)) {
-      const cfgObj = JSON.parse(fs.readFileSync(cfgSrc, 'utf8'));
-      if (cfgObj && cfgObj.allow_raw_html === true) allowRawHtml = true;
-    }
-  } catch (_) { /* ignore */ }
-
-  // Instancia markdown-it com html controlado (desabilita por padrão)
-  const md = new markdownIt({ html: Boolean(allowRawHtml) });
-
-  // Ler header/footer e notFound da pasta rhyla/body
+  // Ler header e ajustar caminhos de recursos para o basePath
   let header = fs.readFileSync(path.join(rhylaPath, 'header.html'), 'utf8');
   
   // Garantir que todos os caminhos de recursos usem o basePath correto
@@ -129,77 +95,12 @@ export default function build() {
       header = header.replace(/<head[^>]*>/i, (m) => m + robotsMeta);
     }
   }
-  const notFoundTemplatePath = path.join(rhylaPath, 'body', 'notFound.html');
-  const notFoundHTML = fs.existsSync(notFoundTemplatePath)
-    ? fs.readFileSync(notFoundTemplatePath, 'utf8')
-    : '<h1>404</h1>';
 
   const bodyPath = path.join(rhylaPath, 'body');
-
-  // Excluídos fixos e padrões configuráveis de ignore (antes do primeiro uso)
-  const EXCLUDE = new Set([
-    'notfound.html', 'notfound.md', 'notfound.htm', 'notfound',
-    'search.html', '.search.html', 'search.md', '.search.md', 
-    // Arquivos a serem excluídos independentemente da pasta
-    'page-generator.css', 'generatePages.js', 'generatepages.js',
-    'header-runtime.js', 'search-runtime.js', 'search_runtime.js',
-    'search_index.js', 'search_index.json', 'generateSearchIndex.js',
-  ]);
-
-  // Normaliza padrões de ignore vindos do config e adiciona defaults
-  const defaultIgnore = ['kit_dev_rhyla'];
-  const ignorePatterns = [...new Set([...defaultIgnore, ...buildIgnore])]
-    .map((p) => p.replace(/^\/+|\/+$/g, '')) // remove barras extras
-    .filter(Boolean)
-    .map((p) => p.toLowerCase());
-
-  function toPosix(relPath) {
-    return relPath ? relPath.split(path.sep).join('/') : '';
-  }
-
-  // Transforma um padrão tipo 'a/b/*.md' em regex
-  function patternToRegex(pat) {
-    const escaped = pat
-      .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-      .replace(/\*/g, '.*');
-    return new RegExp('^' + escaped + '$', 'i');
-  }
-
-  const ignoreRegexes = ignorePatterns
-    .filter((p) => p.includes('*') || p.includes('/'))
-    .map((p) => patternToRegex(p.endsWith('/*') ? p : p));
-
-  const ignoreNames = new Set(
-    ignorePatterns.filter((p) => !p.includes('/') && !p.includes('*'))
-  );
-
-  function shouldIgnore(itemName, itemRelPosix) {
-    const nameLower = itemName.toLowerCase();
-    const relLower = (itemRelPosix || '').toLowerCase();
-
-    if (ignoreNames.has(nameLower)) return true;
-    if (EXCLUDE.has(nameLower)) return true; // mantêm exclusões internas
-
-    if (relLower) {
-      // 1) Diretórios listados sem '*' devem ignorar tudo que esteja dentro
-      for (const pat of ignorePatterns) {
-        if (!pat.includes('*')) {
-          const dirPat = pat.replace(/\/$/, '');
-          if (relLower === dirPat || relLower.startsWith(dirPat + '/')) {
-            return true;
-          }
-        }
-      }
-
-      // 2) Padrões com '*' ou caminhos específicos
-      for (const rx of ignoreRegexes) {
-        if (rx.test(relLower)) return true;
-        // Se o padrão representa um diretório (termina com /*), já está coberto pelo regex acima
-        // Para padrões de diretório sem '/*', ignorar tudo que comece com "dir/"
-      }
-    }
-    return false;
-  }
+  const notFoundPath = path.join(bodyPath, 'notFound.html');
+  const notFoundHTML = fs.existsSync(notFoundPath)
+    ? (allowRawHtml ? fs.readFileSync(notFoundPath, 'utf8') : sanitizeHtml(fs.readFileSync(notFoundPath, 'utf8')))
+    : '<h1>404</h1>';
 
   function withInlineHeaderRuntime(html) {
     try {
@@ -341,10 +242,6 @@ export default function build() {
   }
   const absoluteBaseUrl = getBaseUrl();
 
-  // Coleta das páginas geradas para sitemap
-  /** @type {Set<string>} */
-  const generatedRelPaths = new Set(); // caminhos relativos com .html (ex: "guide/intro.html")
-
   // Função para reescrever URLs para considerar o basePath
   function rewriteForBase(html, base) {
     if (!base || base === '/') return html;
@@ -369,299 +266,92 @@ export default function build() {
     );
   }
 
-  // Gerar home como index.html (aceita home.md ou home.html)
-  const homeMdPath = path.join(bodyPath, 'home.md');
-  const homeHtmlPath = path.join(bodyPath, 'home.html');
-  if (fs.existsSync(homeMdPath) || fs.existsSync(homeHtmlPath)) {
-    const content = fs.existsSync(homeMdPath)
-      ? md.render(fs.readFileSync(homeMdPath, 'utf8'))
-      : fs.readFileSync(homeHtmlPath, 'utf8');
-  const sidebar = generateSidebarHTML(bodyPath, null, 'home', { ignore: ignorePatterns });
-    let pageHTML = rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${content}</main>`, basePath);
-    const canonicalRoot = absoluteBaseUrl ? absoluteBaseUrl : null;
-    pageHTML = injectCanonical(pageHTML, canonicalRoot);
-    fs.writeFileSync(path.join(distPath, 'index.html'), pageHTML);
-    generatedRelPaths.add('index.html');
-    // Alias home.html na raiz
-    fs.writeFileSync(path.join(distPath, 'home.html'), pageHTML);
-    // Alias /home/index.html para URLs limpas
-    const homeDir = path.join(distPath, 'home');
-    fs.mkdirSync(homeDir, { recursive: true });
-    fs.writeFileSync(path.join(homeDir, 'index.html'), pageHTML);
-  } else {
-  const sidebar = generateSidebarHTML(bodyPath, null, null, { ignore: ignorePatterns });
-    fs.writeFileSync(
-      path.join(distPath, 'index.html'),
-      injectCanonical(
-        rewriteForBase(headerInline + sidebar + `<main class=\"rhyla-main\">${notFoundHTML}</main>`, basePath),
-        absoluteBaseUrl || null
-      )
-    );
-    generatedRelPaths.add('index.html');
-  }
+  // URL absoluta (se site_url existir) ou relativa ao basePath, para llms.txt
+  const urlFor = (rel) => (absoluteBaseUrl || basePath) + rel.replace(/^\//, '');
 
+  const writeFile = (rel, content) => {
+    const out = path.join(distPath, rel);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, content, 'utf8');
+  };
 
-  // Função recursiva para gerar páginas a partir de rhyla/body (sem página de busca)
-  function processDir(dir, relPath = '') {
-    const items = fs.readdirSync(dir, { withFileTypes: true });
+  const pages = collectPages(bodyPath, { md, allowRawHtml, isIgnored });
+  // Caminhos relativos com .html, para o sitemap
+  const sitemapPaths = [];
 
-    for (const item of items) {
-      const itemPath = path.join(dir, item.name);
-      const itemRel = path.join(relPath, item.name);
-      const itemRelPosix = toPosix(itemRel);
+  for (const page of pages) {
+    const markdownRel = page.markdown !== null ? (page.isHome ? 'index.md' : `${page.slug}.md`) : null;
+    const pageHeader = applyPageMeta(headerInline, {
+      pageTitle: page.isHome ? '' : page.title,
+      siteTitle: config.title,
+      description: page.description || (page.isHome ? config.description : ''),
+      markdownHref: markdownRel ? '/' + markdownRel : null,
+    });
+    const sidebar = page.isHome
+      ? generateSidebarHTML(bodyPath, null, 'home', { ignore: ignorePatterns })
+      : generateSidebarHTML(bodyPath, page.group || null, page.name, { ignore: ignorePatterns });
+    const html = rewriteForBase(assemblePage(pageHeader, sidebar, page.html), basePath);
 
-      if (item.isDirectory()) {
-        // Respeita a lista de ignorados (nomes/paths/padrões)
-        if (shouldIgnore(item.name, itemRelPosix)) {
-          continue;
-        }
-        processDir(itemPath, itemRel);
-        continue;
-      }
-
-      const lower = item.name.toLowerCase();
-      if (!(item.name.endsWith('.md') || item.name.endsWith('.html'))) continue;
-      // Respeita ignorados
-      if (shouldIgnore(item.name, itemRelPosix)) continue;
-
-      const topic = path.basename(item.name, path.extname(item.name));
-      const group = relPath ? relPath.split(path.sep).join('/') : null;
-
-      let content = '';
-      if (item.name.endsWith('.md')) {
-        content = md.render(fs.readFileSync(itemPath, 'utf8'));
-      } else {
-        content = fs.readFileSync(itemPath, 'utf8');
-      }
-
-      // Sanitize included raw HTML files unless allowRawHtml is true
-      if (!allowRawHtml && item.name.endsWith('.html')) {
-        // Very small sanitizer: remove <script> blocks and on* attributes
-        content = content.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '');
-        content = content.replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
-      }
-
-  const sidebar = generateSidebarHTML(bodyPath, group, topic, { ignore: ignorePatterns });
-
-      const outDir = path.join(distPath, relPath);
-      fs.mkdirSync(outDir, { recursive: true });
-
-  let pageHTML = rewriteForBase(headerInline + sidebar + `<main class="rhyla-main">${content}</main>`, basePath);
-  // caminho relativo posix para canonical
-  const relPosix = toPosix(path.join(relPath, `${topic}.html`)).replace(/^\//, '');
-  const canonical = absoluteBaseUrl ? absoluteBaseUrl + relPosix : null;
-  pageHTML = injectCanonical(pageHTML, canonical);
-
-  // Verificar se já existe uma pasta com o mesmo nome do arquivo que está sendo gerado
-  const topicDir = path.join(outDir, topic);
-  const topicDirExists = fs.existsSync(topicDir) && fs.statSync(topicDir).isDirectory();
-  
-  // Gerar o arquivo .html apenas se não existir uma pasta com o mesmo nome
-  if (!topicDirExists) {
-    fs.writeFileSync(path.join(outDir, `${topic}.html`), pageHTML);
-    generatedRelPaths.add(relPosix);
-  }
-
-      if (!relPath) {
-        // Para arquivos na raiz, criar também a versão em pasta/index.html (URLs limpas)
-        // Evitar duplicação: se já existir um arquivo com o mesmo nome, não criar a versão pasta/index.html
-        const topicFile = path.join(distPath, `${topic}.html`);
-        const topicFileExists = fs.existsSync(topicFile);
-        
-        if (!topicFileExists) {
-          const cleanDir = path.join(distPath, topic);
-          fs.mkdirSync(cleanDir, { recursive: true });
-          fs.writeFileSync(path.join(cleanDir, 'index.html'), pageHTML);
-          // Registrar apenas uma vez no sitemap
-          if (!generatedRelPaths.has(relPosix)) {
-            generatedRelPaths.add(toPosix(path.join(topic, 'index.html')));
-          }
-        }
+    if (page.isHome) {
+      const homeHtml = injectCanonical(html, absoluteBaseUrl);
+      writeFile('index.html', homeHtml);
+      // Aliases: /home.html e /home/ (URLs limpas)
+      writeFile('home.html', homeHtml);
+      writeFile('home/index.html', homeHtml);
+      sitemapPaths.push('index.html');
+    } else {
+      const rel = `${page.slug}.html`;
+      writeFile(rel, injectCanonical(html, absoluteBaseUrl ? absoluteBaseUrl + rel : null));
+      sitemapPaths.push(rel);
+      // Se existir uma pasta com o mesmo nome (ex.: guide.md + guide/), /guide/ também abre a página
+      if (fs.existsSync(path.join(bodyPath, page.slug))) {
+        writeFile(`${page.slug}/index.html`, injectCanonical(html, absoluteBaseUrl ? absoluteBaseUrl + rel : null));
       }
     }
+
+    // Versão markdown da página, para agentes de IA e ferramentas
+    if (markdownRel) writeFile(markdownRel, page.markdown);
   }
 
-  processDir(bodyPath);
+  if (!pages.some((p) => p.isHome)) {
+    const sidebar = generateSidebarHTML(bodyPath, null, null, { ignore: ignorePatterns });
+    writeFile('index.html', injectCanonical(
+      rewriteForBase(assemblePage(applyPageMeta(headerInline, { siteTitle: config.title }), sidebar, notFoundHTML), basePath),
+      absoluteBaseUrl
+    ));
+    sitemapPaths.push('index.html');
+  }
 
   // 404 com sidebar
   const sidebar404 = generateSidebarHTML(bodyPath, null, null, { ignore: ignorePatterns });
-  fs.writeFileSync(
-    path.join(distPath, '404.html'),
-    rewriteForBase(headerInline + sidebar404 + `<main class="rhyla-main">${notFoundHTML}</main>`, basePath)
-  );
+  writeFile('404.html', rewriteForBase(
+    assemblePage(applyPageMeta(headerInline, { pageTitle: 'Not found', siteTitle: config.title }), sidebar404, notFoundHTML),
+    basePath
+  ));
 
-  // Função para gerar o índice de busca depois do processamento do site
-  function generateSearchIndex() {
-    console.log('🔍 Gerando índice de busca...');
-    
-      // Função auxiliar para percorrer o dist processado (em vez de percorrer o body original)
-    function walkDist(dir, basePath = '') {
-      const entries = [];
-      const items = fs.readdirSync(dir, { withFileTypes: true });
-      
-      for (const item of items) {
-        const fullPath = path.join(dir, item.name);
-        const relativePath = path.join(basePath, item.name);
-        
-        if (item.isDirectory()) {
-          // Ignora diretórios especiais
-          if (['scripts', 'styles', 'public'].includes(item.name)) continue;
-          // Ignora a pasta /home/ que é um alias para a raiz
-          if (item.name === 'home' && !basePath) continue;
-          entries.push(...walkDist(fullPath, relativePath));
-        } else if (item.name.endsWith('.html') && !['404.html', 'search.html', 'robots.txt', 'sitemap.xml'].includes(item.name)) {
-          // Ignora home.html na raiz, pois já temos index.html (são o mesmo conteúdo)
-          if (item.name === 'home.html' && !basePath) continue;
-          
-          // Só indexa arquivos HTML gerados (exceto 404, busca e outros arquivos especiais)
-          entries.push({
-            filePath: fullPath,
-            route: '/' + relativePath.replace(/\\/g, '/').replace(/\.html$/, '')
-          });
-        }
-      }
-      return entries;
-    }    // Strip tags HTML
-    function stripHtml(html) {
-      return html
-        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/&nbsp;|&amp;|&lt;|&gt;|&quot;|&#39;/g, ' ');
-    }
-    
-    // Extrai título do HTML processado
-    function extractTitle(html) {
-      // Primeiro tenta encontrar o H1 dentro da tag main (conteúdo principal)
-      const mainContent = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
-      if (mainContent) {
-        const h1InMain = mainContent[1].match(/<h1[^>]*>(.*?)<\/h1>/i);
-        if (h1InMain) return stripHtml(h1InMain[1]).trim();
-      }
-      
-      // Se não encontrar no conteúdo principal, procura h1 em qualquer lugar
-      const h1 = html.match(/<h1[^>]*>(.*?)<\/h1>/i);
-      if (h1) return stripHtml(h1[1]).trim();
-      
-      // Por último, tenta a tag title
-      const title = html.match(/<title[^>]*>(.*?)<\/title>/i);
-      if (title) {
-        // Remove sufixo padrão tipo "- Nome do Site" ou "| Nome do Site"
-        const titleText = stripHtml(title[1]).trim();
-        return titleText.replace(/\s*[|\-–—]\s*.*$/, '').trim();
-      }
-      
-      return null;
-    }
-    
-    try {
-      // Obtém todos os arquivos HTML no dist (já processados)
-      const htmlFiles = walkDist(distPath);
-      
-      const entries = htmlFiles.map(({ filePath, route }) => {
-        const content = fs.readFileSync(filePath, 'utf8');
-        
-        // Busca conteúdo principal para extrair título e texto
-        const mainContent = content.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
-        
-        // Extrair título com prioridade para H1 no conteúdo
-        let title = null;
-        
-        // 1. Primeiro tenta encontrar H1 dentro do conteúdo principal
-        if (mainContent) {
-          const h1Match = mainContent[1].match(/<h1[^>]*>(.*?)<\/h1>/i);
-          if (h1Match) {
-            title = stripHtml(h1Match[1]).trim();
-          } else {
-            // 2. Se não há H1 no conteúdo, tenta encontrar qualquer cabeçalho
-            const headingMatch = mainContent[1].match(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/i);
-            if (headingMatch) title = stripHtml(headingMatch[1]).trim();
-          }
-        }
-        
-        // 3. Se ainda não tem título, procura H1 em qualquer lugar do documento
-        if (!title) {
-          const h1Match = content.match(/<h1[^>]*>(.*?)<\/h1>/i);
-          if (h1Match) title = stripHtml(h1Match[1]).trim();
-        }
-        
-        // 4. Último recurso: usar o nome do arquivo sem extensão
-        if (!title || title === "RhylaDoc") {
-          // Remove extensão e converte hífens para espaços
-          title = path.basename(filePath, '.html')
-                   .replace(/-/g, ' ')
-                   .replace(/\b\w/g, c => c.toUpperCase()); // Capitaliza primeira letra de cada palavra
-        }
-        
-        // Extrai o conteúdo textual para busca
-        const textContent = mainContent 
-          ? stripHtml(mainContent[1])
-          : stripHtml(content);
-          
-        // Normaliza a rota (home deve ser /)
-        const normalizedRoute = route === '/home' ? '/' : route;
-        // Normaliza a rota para index.html dentro de diretórios (tornam-se o diretório apenas)
-        const normalizedNoIndex = normalizedRoute.endsWith('/index') 
-          ? normalizedRoute.substring(0, normalizedRoute.length - 6) // remover o "/index"
-          : normalizedRoute;
-        
-        // Garante que a rota vazia ou raiz seja sempre "/" (não vazia)
-        const finalRoute = normalizedNoIndex === '' ? '/' : normalizedNoIndex;
-        
-        return {
-          route: finalRoute,
-          title: title,
-          content: textContent.replace(/\s+/g, ' ').trim()
-        };
-      });
-      
-      // Escreve o índice de busca em JSON
-      const searchJsonDst = path.join(distPath, 'search_index.json');
-      fs.writeFileSync(searchJsonDst, JSON.stringify(entries, null, 2), 'utf8');
-      
-      // Copia para a pasta scripts também
-      const scriptsDst = path.join(distPath, 'scripts');
-      fs.writeFileSync(path.join(scriptsDst, 'search_index.json'), JSON.stringify(entries, null, 2), 'utf8');
-      
-      // Gera a versão JS do índice
-      fs.writeFileSync(
-        path.join(scriptsDst, 'search_index.js'), 
-        `window.__SEARCH_INDEX__ = ${JSON.stringify(entries)};`, 
-        'utf8'
-      );
-      
-      console.log(`Índice de busca gerado: ${entries.length} entradas`);
-      return true;
-    } catch (error) {
-      console.error('Erro ao gerar índice de busca:', error);
-      return false;
-    }
-  }
-  
-  // Agora gera o índice de busca após todo o processamento
-  generateSearchIndex();
+  // Índice de busca (consumido pelo search-runtime no navegador)
+  const searchIndex = buildSearchIndex(pages);
+  writeFile('search_index.json', JSON.stringify(searchIndex));
+  writeFile('scripts/search_index.json', JSON.stringify(searchIndex));
+  writeFile('scripts/search_index.js', `window.__SEARCH_INDEX__ = ${JSON.stringify(searchIndex)};`);
 
-  console.log('✅ Build completed successfully.');
+  // llms.txt + llms-full.txt (https://llmstxt.org)
+  const llmsOptions = { title: config.title, description: config.description, urlFor };
+  writeFile('llms.txt', buildLlmsTxt(pages, llmsOptions));
+  writeFile('llms-full.txt', buildLlmsFullTxt(pages, llmsOptions));
 
-  // Gerar sitemap.xml e robots.txt se siteUrl estiver definido
+  // sitemap.xml e robots.txt (precisam de site_url)
   if (absoluteBaseUrl) {
-    try {
-      const urls = Array.from(generatedRelPaths).sort();
-      const today = new Date().toISOString().split('T')[0];
-      const sitemapEntries = urls.map((rel) => {
-        const loc = absoluteBaseUrl + rel.replace(/^\//, '');
-        return `  <url>\n    <loc>${loc}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${rel === 'index.html' ? '1.0' : '0.5'}</priority>\n  </url>`;
-      }).join('\n');
-      const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${sitemapEntries}\n</urlset>\n`;
-      fs.writeFileSync(path.join(distPath, 'sitemap.xml'), sitemap, 'utf8');
-
-      const robots = `User-agent: *\nAllow: /\n\nSitemap: ${absoluteBaseUrl}sitemap.xml\n`;
-      fs.writeFileSync(path.join(distPath, 'robots.txt'), robots, 'utf8');
-      console.log('🗺️  sitemap.xml e robots.txt gerados.');
-    } catch (e) {
-      console.warn('⚠️  Faileld to generate sitemap/robots:', e?.message || e);
-    }
+    const today = new Date().toISOString().split('T')[0];
+    const entries = sitemapPaths.sort().map((rel) =>
+      `  <url>\n    <loc>${absoluteBaseUrl + rel}</loc>\n    <lastmod>${today}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${rel === 'index.html' ? '1.0' : '0.5'}</priority>\n  </url>`
+    ).join('\n');
+    writeFile('sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries}\n</urlset>\n`);
+    writeFile('robots.txt', `User-agent: *\nAllow: /\n\nSitemap: ${absoluteBaseUrl}sitemap.xml\n`);
   } else {
-    console.warn('ℹ️  site_url missing in rhyla-docs/config.json. Set "site_url" to generate sitemap.xml, robots.txt, and absolute canonicals.');
+    log(`ℹ️  site_url missing in ${DOCS_DIR}/config.json. Set "site_url" to generate sitemap.xml, robots.txt and absolute URLs.`);
   }
+
+  log(`✅ Build completed: ${pages.length} pages → dist/ (search index, llms.txt, llms-full.txt, .md sources)`);
+  return { distPath, pages: pages.length };
 }

@@ -24,7 +24,7 @@ Rhyla is a lightweight, template‑driven documentation generator. Write in Mark
 ```bash
 rhyla init
 ```
-This creates a `rhyla/` folder with templates (`header.html`, `home.md`, `styles/`, `public/`, and `body/`).
+This creates a `rhyla-docs/` folder with templates (`header.html`, `config.json`, `AGENTS.md`, `styles/`, `public/`, and `body/`).
 
 2) Start developing
 ```bash
@@ -41,13 +41,13 @@ Outputs a static site to `dist/`.
 ---
 
 ## 📁 Authoring model
-The sidebar mirrors the folder tree under `rhyla/body/`.
+The sidebar mirrors the folder tree under `rhyla-docs/body/`.
 
 - Folders become groups (with collapsible sections).
 - `.md` files render to HTML; `.html` files are included verbatim.
 - File path defines the route. Examples:
-   - `rhyla/body/get-posts.md` → `/get-posts`
-   - `rhyla/body/api/users/create.md` → `/api/users/create`
+   - `rhyla-docs/body/get-posts.md` → `/get-posts`
+   - `rhyla-docs/body/api/users/create.md` → `/api/users/create`
 
 Naming tips:
 - Prefer lowercase and hyphens: `quick-start.md`, `advanced-install.md`.
@@ -72,11 +72,9 @@ Anti‑flicker: the selected theme is applied before first paint to avoid flashi
 ## 🔎 Search
 Rhyla ships with a content indexer and a special search page.
 
-- Dev: index served from `/search_index.json` and refreshed on changes.
-- Build: assets live under `/search/` (`search_index.json` + scripts).
+- Dev: index served from `/search_index.json`, always built from the current files.
+- Build: written to `dist/search_index.json`.
 - The search UI highlights matches and links to routes.
-
-Tip: keep `rhyla/body/search.html` in your project (it’s listed first in the sidebar).
 
 ---
 
@@ -87,7 +85,7 @@ Page transitions only replace the `<main>` content, keeping header and sidebar f
 
 ## 📦 Project layout (essentials)
 ```
-rhyla/
+rhyla-docs/
    body/               # your docs (md/html)
    public/             # static assets served at /public
    styles/             # global + themes
@@ -98,8 +96,7 @@ rhyla/
 
 ## 🧩 FAQ (short)
 - Search shows “Loading index…” forever?
-   - Ensure the index exists (dev regenerates automatically; build writes to `/search/`).
-   - Keep the Search page file in `rhyla/body/`.
+   - Check that `/search_index.json` loads (in a build it is `dist/search_index.json`).
 - Can I use plain HTML pages?
    - Yes. Place `.html` files anywhere under `body/`.
 - How do I deploy?

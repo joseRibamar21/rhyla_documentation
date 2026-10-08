@@ -7,3 +7,4 @@ rhyla-docs
 
 src/templates/scripts/search_index.js
 src/templates/scripts/search_index.json
+.DS_Store

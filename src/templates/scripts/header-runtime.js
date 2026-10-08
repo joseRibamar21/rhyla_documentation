@@ -316,6 +316,7 @@
     const main = document.querySelector('main.rhyla-main');
     if (!newMain || !main) return false;
     main.innerHTML = newMain.innerHTML;
+    if (doc.title) document.title = doc.title;
     executeScripts(main);
     
     // Extrair o hash da URL (âncora) e o parâmetro de consulta
