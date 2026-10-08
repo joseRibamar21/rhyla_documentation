@@ -21,6 +21,11 @@ export function applyPageMeta(header, { pageTitle, siteTitle, description, markd
     }
   }
 
+  // Nome do site no header, já no HTML (sem esperar o runtime ler o config.json)
+  if (siteTitle) {
+    out = out.replace(/(<[a-z0-9]+[^>]*\bid=["']rhyla-title["'][^>]*>)[\s\S]*?(<\/)/i, (_, open, close) => open + escapeHtml(siteTitle) + close);
+  }
+
   if (description) {
     const tag = `<meta name="description" content="${escapeHtml(description)}">`;
     if (/<meta\s+name=["']description["'][^>]*>/i.test(out)) {

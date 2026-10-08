@@ -60,12 +60,10 @@ Naming tips:
 ---
 
 ## 🎨 Theming & layout
-- Global layout: `styles/global.css`.
-- Themes: `styles/light.css` and `styles/dark.css` (variables + colors).
-- Header: edit `header.html` as needed.
-- HTTP verb tags are styled via `.http-tag` classes.
-
-Anti‑flicker: the selected theme is applied before first paint to avoid flashing.
+- Design tokens (colors, fonts, sizes) live in `styles/global.css` as CSS variables, for light and dark (`html[data-theme="dark"]`).
+- Override any token in `styles/light.css` or `styles/dark.css`, e.g. `:root { --rh-accent: #0f766e; }`.
+- Header: edit `header.html` (swap the brand mark for `<img src="/public/logo.png">` to use your logo).
+- The theme follows the OS preference until the reader picks one with the toggle.
 
 ---
 

@@ -49,10 +49,7 @@
     
     // Garantir que o tema esteja correto
     const themeCss = document.getElementById('theme-style');
-    if (themeCss) {
-      const saved = localStorage.getItem('rhyla-theme') || 'light';
-      themeCss.href = PREFIX + 'styles/' + saved + '.css';
-    }
+    if (themeCss) themeCss.href = PREFIX + 'styles/' + getTheme() + '.css';
   })();
 
   function onReady(cb){
@@ -60,50 +57,71 @@
     else cb();
   }
 
-  let themeToggle, themeLink;
-  onReady(() => {
-    themeToggle = document.getElementById('theme-toggle');
-    themeLink = document.getElementById('theme-style');
-    
-    // Garantir que os caminhos CSS estejam corretos após DOM estar pronto
-    if (themeLink) {
-      const saved = localStorage.getItem('rhyla-theme') || 'light';
-      setTheme(saved);
-    }
-  });
-
-  function setTheme(theme) {
-    if (!themeLink) themeLink = document.getElementById('theme-style');
-    // Garantir que esteja usando o caminho absoluto com o PREFIX
-    if (themeLink) {
-      // Usar URL absoluta baseada no PREFIX, garantindo formato correto
-      let prefix = PREFIX;
-      if (!prefix.endsWith('/')) prefix += '/';
-      
-      // Constroi URL absoluta para o tema
-      const absoluteUrl = prefix + 'styles/' + theme + '.css';
-      
-      // Atribuir diretamente ao href para evitar problemas de resolução de URL
-      themeLink.href = absoluteUrl;
-      
-      // Log para debug
-      console.log(`[Rhyla] Tema alterado para ${theme}, URL: ${absoluteUrl}`);
-    }
-    
-    localStorage.setItem('rhyla-theme', theme);
-    if (!themeToggle) themeToggle = document.getElementById('theme-toggle');
-    if (themeToggle) themeToggle.textContent = theme === 'light' ? '🌙 Dark' : '☀️ Light';
+  // ===== Tema =====
+  // Escolha salva (botão) > tema já aplicado pelo header > preferência do sistema
+  function getTheme() {
+    let saved = null;
+    try { saved = localStorage.getItem('rhyla-theme'); } catch (_) {}
+    if (saved === 'dark' || saved === 'light') return saved;
+    const attr = document.documentElement.getAttribute('data-theme');
+    if (attr === 'dark' || attr === 'light') return attr;
+    return window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
 
-  const saved = localStorage.getItem('rhyla-theme') || 'light';
-  onReady(() => {
-    setTheme(saved);
+  function setTheme(theme, persist) {
+    document.documentElement.setAttribute('data-theme', theme);
+    const themeLink = document.getElementById('theme-style');
+    if (themeLink) themeLink.href = PREFIX + 'styles/' + theme + '.css';
+    if (persist) { try { localStorage.setItem('rhyla-theme', theme); } catch (_) {} }
     const btn = document.getElementById('theme-toggle');
-    if (btn) btn.addEventListener('click', () => {
-      const cur = localStorage.getItem('rhyla-theme') || 'light';
-      setTheme(cur === 'light' ? 'dark' : 'light');
+    // Headers novos usam ícones (data-icon); headers antigos usam texto
+    if (btn && !btn.hasAttribute('data-icon')) btn.textContent = theme === 'light' ? '🌙 Dark' : '☀️ Light';
+    if (btn) btn.setAttribute('aria-pressed', String(theme === 'dark'));
+  }
+
+  onReady(() => {
+    setTheme(getTheme(), false);
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.addEventListener('click', () => setTheme(getTheme() === 'dark' ? 'light' : 'dark', true));
+  });
+
+  // ===== Menu lateral no mobile =====
+  function setNavOpen(open) {
+    document.body.classList.toggle('rh-nav-open', open);
+    const sb = document.querySelector('.rhyla-sidebar');
+    if (sb) sb.classList.toggle('open', open);
+    const btn = document.getElementById('menu-toggle');
+    if (btn) btn.setAttribute('aria-expanded', String(open));
+  }
+  onReady(() => {
+    const btn = document.getElementById('menu-toggle');
+    if (btn) btn.addEventListener('click', () => setNavOpen(!document.body.classList.contains('rh-nav-open')));
+    document.addEventListener('click', (e) => {
+      if (e.target && e.target.closest && e.target.closest('[data-close-nav]')) setNavOpen(false);
     });
   });
+
+  // ===== Botão de copiar nos blocos de código =====
+  function addCopyButtons(root) {
+    (root || document).querySelectorAll('main.rhyla-main pre').forEach((pre) => {
+      if (pre.querySelector('.rh-copy-btn')) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'rh-copy-btn';
+      btn.textContent = 'Copy';
+      btn.addEventListener('click', async () => {
+        const code = pre.querySelector('code') || pre;
+        try {
+          await navigator.clipboard.writeText(code.innerText.replace(/\n$/, ''));
+          btn.textContent = 'Copied';
+          btn.classList.add('copied');
+          setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1500);
+        } catch (_) { btn.textContent = 'Failed'; }
+      });
+      pre.appendChild(btn);
+    });
+  }
+  onReady(() => addCopyButtons(document));
 
   // Estado de configuração
   let RHYLA_CFG = { side_topics: false };
@@ -334,6 +352,8 @@
     
     // Atualiza o histórico, sidebar e TOC
     if (newUrl && doPush) history.pushState({}, '', newUrl);
+    setNavOpen(false);
+    addCopyButtons(main);
     fixSidebarLinks();
     updateActiveSidebar(newUrl || location.pathname);
     
@@ -372,6 +392,7 @@
       // 3. Se nenhum dos acima, ou se houve falha, rola para o topo
       if (attempt === 1) {
         main.scrollTop = 0;
+        window.scrollTo(0, 0);
       }
       
       return false;
@@ -478,116 +499,165 @@
     // O scrollToQueryIfAny será chamado por swapMainFromHTML quando necessário
   });
 
-  // ===== Global Search Overlay =====
-  let overlay, openBtn, closeBtn, input, meta, resultsDiv;
+  // ===== Busca (diálogo global) =====
+  let overlay, input, meta, resultsDiv;
+  let searchIndex = Array.isArray(window.__SEARCH_INDEX__) ? window.__SEARCH_INDEX__ : [];
+  let indexPromise = null;
+  let selected = -1;
+  const MAX_RESULTS = 20;
+
   onReady(() => {
     overlay = document.getElementById('search-overlay');
-    openBtn = document.getElementById('search-open');
-    closeBtn = document.getElementById('search-close');
     input = document.getElementById('search-input');
     meta = document.getElementById('search-meta');
     resultsDiv = document.getElementById('search-results');
+
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+    document.querySelectorAll('[data-shortcut]').forEach((k) => { k.textContent = isMac ? '⌘ K' : 'Ctrl K'; });
+
+    const openBtn = document.getElementById('search-open');
+    const closeBtn = document.getElementById('search-close');
+    if (openBtn) openBtn.addEventListener('click', openOverlay);
+    if (closeBtn) closeBtn.addEventListener('click', closeOverlay);
+    if (overlay) overlay.addEventListener('click', (e) => { if (e.target && e.target.hasAttribute('data-close-overlay')) closeOverlay(); });
+    if (input) {
+      input.addEventListener('input', debounce((e) => doSearch(e.target.value), 80));
+      input.addEventListener('keydown', onSearchKeydown);
+    }
+    if (resultsDiv) resultsDiv.addEventListener('click', (e) => {
+      if (e.target && e.target.closest && e.target.closest('a')) closeOverlay();
+    }, true);
   });
 
-  let searchIndex = Array.isArray(window.__SEARCH_INDEX__) ? window.__SEARCH_INDEX__ : [];
-  if (!searchIndex.length && meta) meta.textContent = 'Loading index…';
-
-  async function ensureIndexLoaded() {
-    if (searchIndex.length) return;
-    // Tenta obter o índice de busca usando caminho correto considerando PREFIX
-    // 1. Obtém direto do PREFIX (configuração central)
-    // 2. Tenta obter a partir do caminho atual (compatibilidade com versões antigas)
-    const basePath = location.pathname.endsWith('/') ? location.pathname : (location.pathname.replace(/[^\/]*$/, ''));
+  function ensureIndexLoaded() {
+    if (searchIndex.length) return Promise.resolve();
+    if (indexPromise) return indexPromise;
+    const basePath = location.pathname.endsWith('/') ? location.pathname : location.pathname.replace(/[^\/]*$/, '');
     const candidates = [PREFIX + 'search_index.json', basePath + 'search_index.json'];
-    for (const url of candidates) {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) continue;
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          // Basic sanitize of indexed content to avoid rendering raw HTML in snippets
-          searchIndex = data.map(p => ({ ...p, content: String(p.content || '').replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '').replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '') }));
-          break;
-        }
-      } catch (_) { /* next */ }
-    }
-    if (meta) meta.textContent = searchIndex.length ? `${searchIndex.length} pages indexed` : 'No pages indexed';
+    indexPromise = (async () => {
+      for (const url of candidates) {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (Array.isArray(data)) { searchIndex = data; break; }
+        } catch (_) { /* tenta a próxima */ }
+      }
+      indexPromise = null;
+    })();
+    return indexPromise;
   }
 
-  function highlight(text, query) {
-    const esc = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp('(' + esc + ')', 'gi');
-    return text.replace(regex, '<mark>$1</mark>');
+  const fold = (s) => {
+    try { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+    catch (_) { return String(s || '').toLowerCase(); }
+  };
+  const escapeHtml = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  // Destaca o trecho [start, start+len) do texto original, escapando o resto
+  function markRange(text, start, len) {
+    return escapeHtml(text.slice(0, start)) + '<mark>' + escapeHtml(text.slice(start, start + len)) + '</mark>' + escapeHtml(text.slice(start + len));
   }
 
-  function formatLabel(page) {
-    if (page.title && page.title.trim()) return page.title;
-    return (page.route || '').replace(/^\//, '') || 'Untitled';
+  function snippetFor(content, idx, len) {
+    const from = Math.max(0, idx - 60);
+    const to = Math.min(content.length, idx + len + 100);
+    const text = content.slice(from, to);
+    return (from > 0 ? '… ' : '') + markRange(text, idx - from, len) + (to < content.length ? ' …' : '');
   }
 
   function buildRouteWithQuery(route, query) {
-    try {
-      const parts = String(route || '#').split('#');
-      const path = parts[0];
-      const hash = parts[1] ? ('#' + parts[1]) : '';
-      const sep = path.includes('?') ? '&' : '?';
-      return path + sep + 'query=' + encodeURIComponent(query) + hash;
-    } catch (_) {
-      return route;
-    }
+    const sep = String(route).includes('?') ? '&' : '?';
+    return route + sep + 'query=' + encodeURIComponent(query);
   }
+
+  // "/guide/install" → "<prefix>guide/install.html" (funciona em qualquer host estático)
+  function routeHref(route) {
+    const r = String(route || '/').replace(/^\/+/, '');
+    return PREFIX + (r ? r + '.html' : '');
+  }
+
+  function setMeta(text) { if (meta) meta.textContent = text; }
 
   function doSearch(query) {
     const q = (query || '').trim();
-    if (!q) { resultsDiv.innerHTML = ''; if (meta) meta.textContent = searchIndex.length ? `${searchIndex.length} pages indexed` : 'No pages indexed'; return; }
-    const ql = q.toLowerCase();
-    const results = [];
+    selected = -1;
+    if (!resultsDiv) return;
+    if (!q) {
+      resultsDiv.innerHTML = '';
+      setMeta(searchIndex.length ? `${searchIndex.length} pages` : '');
+      return;
+    }
+    const fq = fold(q);
+    const scored = [];
     for (const page of searchIndex) {
-      if (!page || !page.content) continue;
-      const hay = String(page.content).toLowerCase();
-      const matchIndex = hay.indexOf(ql);
-      if (matchIndex !== -1) {
-        const raw = String(page.content);
-        const start = Math.max(0, matchIndex - 40);
-        const end = Math.min(raw.length, matchIndex + 40);
-        const snippet = raw.slice(start, end);
-        results.push({ route: page.route || '#', label: formatLabel(page), snippet: highlight(snippet, q) });
-      }
+      if (!page) continue;
+      const title = String(page.title || page.route || 'Untitled');
+      const content = String(page.content || '');
+      const ft = fold(title);
+      const fc = fold(content);
+      const inTitle = ft.indexOf(fq);
+      const inContent = fc.indexOf(fq);
+      if (inTitle === -1 && inContent === -1) continue;
+      // Título que começa com o termo > título que contém > só no conteúdo
+      const score = inTitle === 0 ? 0 : inTitle > 0 ? 1 : 2;
+      scored.push({ page, title, content, inTitle, inContent, score });
     }
-    resultsDiv.innerHTML = '';
-    if (!results.length) { if (meta) meta.textContent = 'Nenhum resultado encontrado'; return; }
-    if (meta) meta.textContent = `${results.length} resultado(s)`;
-    // Escapa HTML para prevenir XSS em snippets/resultados
-    function escapeHtml(s){
-      return String(s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-    }
+    scored.sort((a, b) => a.score - b.score || a.title.localeCompare(b.title));
 
-    results.forEach(r => {
-      const div = document.createElement('div');
-      div.className = 'result';
-      const href = buildRouteWithQuery(r.route, q);
+    resultsDiv.innerHTML = '';
+    if (!scored.length) {
+      setMeta('');
+      resultsDiv.innerHTML = `<div class="rh-search-empty">No results for “${escapeHtml(q)}”</div>`;
+      return;
+    }
+    setMeta(scored.length === 1 ? '1 result' : `${scored.length} results`);
+
+    for (const r of scored.slice(0, MAX_RESULTS)) {
       const a = document.createElement('a');
-      a.setAttribute('href', href);
-      a.textContent = r.label;
-      const sn = document.createElement('div');
-      sn.className = 'snippet';
-      // highlight() returns HTML with <mark>; allow marks only by escaping then replacing safe tags
-      const safeSnippet = escapeHtml(r.snippet).replace(/&lt;mark&gt;(.*?)&lt;\/mark&gt;/gi, '<mark>$1</mark>');
-      sn.innerHTML = '… ' + safeSnippet + ' …';
-      div.appendChild(a);
-      div.appendChild(sn);
-      resultsDiv.appendChild(div);
-    });
+      a.className = 'result';
+      a.setAttribute('role', 'option');
+      a.href = buildRouteWithQuery(routeHref(r.page.route), q);
+      const titleHtml = r.inTitle >= 0 ? markRange(r.title, r.inTitle, q.length) : escapeHtml(r.title);
+      const path = r.page.route && r.page.route !== '/' ? r.page.route : '/';
+      const snippet = r.inContent >= 0 ? snippetFor(r.content, r.inContent, q.length) : escapeHtml(r.content.slice(0, 140));
+      a.innerHTML = `<div class="result-title"><span>${titleHtml}</span><span class="result-path">${escapeHtml(path)}</span></div>` +
+        (snippet ? `<div class="snippet">${snippet}</div>` : '');
+      resultsDiv.appendChild(a);
+    }
+    select(0);
   }
 
-  const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn.apply(null, a), ms); }; };
-  const onInput = debounce(e => doSearch(e.target.value), 150);
+  function select(i) {
+    const items = resultsDiv ? Array.from(resultsDiv.querySelectorAll('.result')) : [];
+    if (!items.length) { selected = -1; return; }
+    selected = (i + items.length) % items.length;
+    items.forEach((el, k) => {
+      el.classList.toggle('selected', k === selected);
+      el.setAttribute('aria-selected', String(k === selected));
+    });
+    items[selected].scrollIntoView({ block: 'nearest' });
+  }
+
+  function onSearchKeydown(e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); select(selected + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); select(selected - 1); }
+    else if (e.key === 'Enter') {
+      const items = resultsDiv ? resultsDiv.querySelectorAll('.result') : [];
+      const target = items[selected >= 0 ? selected : 0];
+      if (target) { e.preventDefault(); closeOverlay(); navigate(target.getAttribute('href'), true); }
+    }
+  }
+
+  function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn.apply(null, a), ms); }; }
 
   function openOverlay() {
     if (!overlay) return;
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden', 'false');
-    ensureIndexLoaded().then(() => { try { input && input.focus(); } catch(_) {} });
+    if (input) input.focus();
+    if (!searchIndex.length) setMeta('Loading…');
+    ensureIndexLoaded().then(() => doSearch(input ? input.value : ''));
   }
   function closeOverlay() {
     if (!overlay) return;
@@ -597,20 +667,11 @@
     if (resultsDiv) resultsDiv.innerHTML = '';
   }
 
-  onReady(() => {
-    if (openBtn) openBtn.addEventListener('click', openOverlay);
-    if (closeBtn) closeBtn.addEventListener('click', closeOverlay);
-    if (overlay) overlay.addEventListener('click', (e) => { if (e.target && e.target.hasAttribute('data-close-overlay')) closeOverlay(); });
-    if (input) input.addEventListener('input', onInput);
-  });
-  // Fecha o overlay ao clicar em um resultado (antes do handler global de navegação)
-  if (resultsDiv) resultsDiv.addEventListener('click', (e) => {
-    const a = e.target && e.target.closest && e.target.closest('a');
-    if (a) closeOverlay();
-  }, true);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeOverlay();
+    if (e.key === 'Escape') { closeOverlay(); setNavOpen(false); }
+    const typing = /^(input|textarea|select)$/i.test((e.target && e.target.tagName) || '') || (e.target && e.target.isContentEditable);
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openOverlay(); }
+    else if (e.key === '/' && !typing) { e.preventDefault(); openOverlay(); }
   });
 
   // ===== Right side Topics (TOC) =====
@@ -670,7 +731,7 @@
     let html = '<ul class="rh-toc">';
     for (const n of nodes) {
       // Anchors (#) são relativos ao documento atual, então não precisa ajustar com PREFIX
-      html += `<li><a href="#${n.id}">${n.text}</a>`;
+      html += `<li><a href="#${n.id}">${escapeHtml(n.text)}</a>`;
       if (n.children && n.children.length) html += renderToc(n.children);
       html += '</li>';
     }
@@ -678,14 +739,40 @@
     return html;
   }
 
+  let tocObserver = null;
+
+  // Destaca no TOC a seção visível
+  function watchActiveHeading(toc, headings) {
+    if (tocObserver) tocObserver.disconnect();
+    if (!('IntersectionObserver' in window) || !headings.length) return;
+    const links = new Map(Array.from(toc.querySelectorAll('a')).map((a) => [a.getAttribute('href').slice(1), a]));
+    const visible = new Set();
+    tocObserver = new IntersectionObserver((entries) => {
+      entries.forEach((en) => { if (en.isIntersecting) visible.add(en.target.id); else visible.delete(en.target.id); });
+      const current = headings.find((h) => visible.has(h.id)) || null;
+      if (!current) return;
+      links.forEach((a, id) => a.classList.toggle('active', id === current.id));
+    }, { rootMargin: '-70px 0px -65% 0px' });
+    headings.forEach((h) => { const el = document.getElementById(h.id); if (el) tocObserver.observe(el); });
+  }
+
   function generateRightTOC() {
-    const headings = collectHeadings();
-    const tree = buildTocTree(headings);
+    // Todos os títulos ganham id (âncoras), mas o TOC mostra só h2/h3
+    const headings = collectHeadings().filter((h) => h.level === 2 || h.level === 3);
     const toc = ensureTocContainer();
+    if (headings.length < 2) {
+      toc.style.display = 'none';
+      document.body.classList.remove('has-right-toc');
+      return;
+    }
+    toc.style.display = '';
+    document.body.classList.add('has-right-toc');
+    const tree = buildTocTree(headings);
     toc.innerHTML = `
       <div class="rh-toc-header">On this page</div>
       <nav class="rh-toc-wrap">${renderToc(tree)}</nav>
     `;
+    watchActiveHeading(toc, headings);
 
     // Navegação suave para âncoras do TOC
     const main = document.querySelector('main.rhyla-main');

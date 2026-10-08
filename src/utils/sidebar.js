@@ -5,7 +5,8 @@ import { readFrontmatter, escapeHtml } from '../core/content.js';
 import { sortByOrder } from '../core/pages.js';
 
 export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = null, options = {}) {
-  const INDENT = 20; // px por nível de profundidade
+  const CHEVRON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 6 15 12 9 18"/></svg>';
+  const HOME_ICON = '<svg class="rh-sidebar-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>';
   const isFileTopic = (name) => /\.(md|html)$/i.test(name);
   const isHiddenSpecial = (name) => ['home.md','home.html','notfound.md','notfound.html'].includes(name.toLowerCase());
   const isDir = (full) => fs.existsSync(full) && fs.statSync(full).isDirectory();
@@ -102,8 +103,8 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
 
   let html = `<aside class="rhyla-sidebar"><ul>`;
 
-  // 🏠 Home - usando caminho relativo para evitar duplicação de prefixo
-  html += `<li class="item-sidebar ${activeTopic === 'home' ? 'active' : ''}"><a href="./">🏠 Home</a></li>`;
+  // Home - usando caminho relativo para evitar duplicação de prefixo
+  html += `<li class="item-sidebar ${activeTopic === 'home' ? 'active' : ''}"><a href="./">${HOME_ICON}Home</a></li>`;
 
   // Páginas raiz (exceto Search e Home)
   for (const fileName of sortFiles(bodyPath, rootTopics)) {
@@ -172,10 +173,7 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
         }
         label = labelFor(path.join(dirAbs, file), label);
         
-        // Para arquivos em subdiretórios, adicionamos o '|' antes do tópico se não houver método HTTP
-        const prefix = method ? 
-          tagHTML(method, label, postTag, getPostTag(topic).tagType) : 
-          tagHTML(null, '| ' + label, postTag, getPostTag(topic).tagType);
+        const prefix = tagHTML(method, label, postTag, getPostTag(topic).tagType);
           
         // Construímos caminhos relativos corretos para os tópicos dentro de diretórios
         const normalizedPath = normalizePath(relUrl);
@@ -191,18 +189,14 @@ export function generateSidebarHTML(bodyPath, activeGroup = null, activeTopic = 
       if (shouldIgnorePath(childRel)) continue;
       const ag = activeGroup || '';
       const isOpen = ag === childRel || ag.startsWith(childRel + '/'); // abre ancestrais
-      const padHeader = depth * INDENT; // pasta atual
-      const padContent = (depth + 0.3) * INDENT; // conteúdo dentro da pasta
   // Exibir nome da pasta sem underscores (visual apenas)
   const displayDir = String(d).replace(/_/g, ' ');
-  // Ícone especial para pasta de desenvolvimento
-  const dirIcon = String(d).toLowerCase() === 'kit_dev_rhyla' ? '⚙️' : '📁';
       html += `
         <li class="group ${isOpen ? 'open' : ''}">
-          <div class="group-header" style="padding-left:${padHeader}px;" onclick="toggleFolder(this)">
-    <span class="dropdown-arrow ${isOpen ? 'open' : ''}">▶</span> ${dirIcon} ${displayDir}
+          <div class="group-header" onclick="toggleFolder(this)">
+    <span class="dropdown-arrow ${isOpen ? 'open' : ''}">${CHEVRON}</span>${escapeHtml(displayDir)}
           </div>
-          <ul class="group-content" style="max-height:0; padding-left:${padContent}px;">
+          <ul class="group-content" style="max-height:0;">
       `;
       renderDir(dirPath, childRel, depth + 0.3);
       html += `</ul></li>`;

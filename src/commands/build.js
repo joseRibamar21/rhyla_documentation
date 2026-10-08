@@ -65,12 +65,10 @@ export default function build(opts = {}) {
   let header = fs.readFileSync(path.join(rhylaPath, 'header.html'), 'utf8');
   
   // Garantir que todos os caminhos de recursos usem o basePath correto
-  header = header.replace(/href=["']\.\/styles\//g, `href="${basePath}styles/`)
-              .replace(/src=["']\.\/public\//g, `src="${basePath}public/`)
-              .replace(/href=["']\/styles\//g, `href="${basePath}styles/`)
-              .replace(/src=["']\/public\//g, `src="${basePath}public/`)
-              .replace(/src=["']\.\/scripts\//g, `src="${basePath}scripts/`)
-              .replace(/src=["']\/scripts\//g, `src="${basePath}scripts/`);
+  // Caminhos relativos viram absolutos; o prefixo do basePath é aplicado uma única vez em rewriteForBase
+  header = header.replace(/href=["']\.\/styles\//g, 'href="/styles/')
+              .replace(/src=["']\.\/public\//g, 'src="/public/')
+              .replace(/src=["']\.\/scripts\//g, 'src="/scripts/');
   
   // Garantir que os links CSS tenham IDs para que possam ser manipulados via script
   if (!/id=["']theme-style["']/i.test(header)) {
@@ -131,6 +129,8 @@ export default function build(opts = {}) {
       var links = document.querySelectorAll('link[rel="stylesheet"]');
       for (var i = 0; i < links.length; i++) {
         var href = links[i].getAttribute('href');
+        // Caminhos já com o prefixo (ou externos) estão corretos
+        if (!href || href.indexOf(base) === 0 || /^(https?:)?\/\//.test(href)) continue;
         // Substituir links relativos ou absolutos incompletos pelo prefixo correto
         if (href) {
           // Primeiro, remover qualquer prefixo atual
@@ -150,7 +150,7 @@ export default function build(opts = {}) {
       }
       
       // 3. Garantir que o tema seja preservado
-      var savedTheme = localStorage.getItem('rhyla-theme') || 'light';
+      var savedTheme = document.documentElement.getAttribute('data-theme') || localStorage.getItem('rhyla-theme') || 'light';
       var themeLink = document.getElementById('theme-style');
       if (themeLink) {
         themeLink.href = base + 'styles/' + savedTheme + '.css';
@@ -252,7 +252,7 @@ export default function build(opts = {}) {
     // 3. url(/path) → url(/base/path) (em CSS inline)
     // Não reescreve URLs externas (http://, https://, //)
     return html.replace(
-      /\s(src|href)=["'](?!(?:https?:|\/\/))\/([^"']+)["']/gi,
+      /\s(src|href)=["'](?!(?:https?:|\/\/))\/([^"']*)["']/gi,
       function(match, attr, path) {
         const cleanBase = base.replace(/^\/|\/$/g, '');
         return ` ${attr}="/${cleanBase}/${path}"`;

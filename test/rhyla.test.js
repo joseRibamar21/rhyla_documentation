@@ -137,6 +137,26 @@ describe('build', () => {
   test('no sitemap without site_url', () => {
     assert.ok(!fs.existsSync(path.join(dist, 'sitemap.xml')));
   });
+
+  test('site title is rendered into the header', () => {
+    const html = fs.readFileSync(path.join(dist, 'zeta/z-first.html'), 'utf8');
+    assert.match(html, /id="rhyla-title"[^>]*>Documentation Standard</);
+  });
+});
+
+describe('build with base path', () => {
+  test('prefixes asset and page URLs exactly once', () => {
+    const dir = tmpProject();
+    const cfgFile = path.join(dir, 'rhyla-docs/config.json');
+    const cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+    fs.writeFileSync(cfgFile, JSON.stringify({ ...cfg, base: '/docs/' }));
+    build({ cwd: dir, quiet: true });
+    const html = fs.readFileSync(path.join(dir, 'dist/zeta/z-first.html'), 'utf8');
+    assert.match(html, /href="\/docs\/styles\/global\.css"/);
+    assert.match(html, /class="rhyla-brand" href="\/docs\/"/);
+    assert.match(html, /href="\/docs\/zeta\/z-first\.md"/);
+    assert.doesNotMatch(html, /\/docs\/docs\//);
+  });
 });
 
 describe('dev server', () => {
