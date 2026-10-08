@@ -79,6 +79,18 @@ Rhyla draws the diagram (clickable steps, branches and loops), adds previous/nex
 
 **Flow editor.** While `rhyla dev` is running, open `http://localhost:3333/__rhyla/flow-editor` (or click **Edit flow** on any flow page) to build flows visually: add steps by searching pages (or create a page on the spot), connect them on the canvas, label branches, undo/redo, and save. It writes the same frontmatter shown above, so flows stay editable by hand and by AI agents.
 
+### Page editor
+
+While `rhyla dev` is running, every Markdown page has an **Edit page** button (or open `http://localhost:3333/__rhyla/page-editor?page=guide/install`). It is a block editor in the style of Notion, built into Rhyla with no external libraries:
+
+- Blocks: text, headings, bulleted/numbered/to-do lists (with nesting), quotes, code, tables, images, dividers and raw HTML
+- `/` menu to insert or turn blocks into another type; Markdown shortcuts while typing (`#`, `-`, `1.`, `[]`, `>`, ```` ``` ````, `---`)
+- Drag handle to reorder blocks; block menu to duplicate, move, indent or delete
+- Inline formatting with the floating toolbar, shortcuts (Ctrl+B/I/E/K) or by typing `**bold**`, `*italic*`, `` `code` ``, `~~strike~~`
+- Title, description and order edited as page properties (the rest of the frontmatter is kept)
+- Paste Markdown to create blocks; paste or drop images (saved to `public/uploads/`)
+- Autosave to the `.md` file. Pages are saved as plain Markdown and produce the same `dist/` output; the **Markdown** button shows exactly what will be written.
+
 ### API pages
 
 The file name can carry an HTTP method and tags, rendered as badges in the sidebar: `post-create_user-new.md` → **POST** create user **new**. Methods: `get-`, `post-`, `put-`, `patch-`, `delete-`. Tags: `-new`, `-dep`, `-v1`, `-v1.2.0`…

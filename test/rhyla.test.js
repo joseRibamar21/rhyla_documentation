@@ -12,6 +12,8 @@ import { listPages, resolvePageFile } from '../src/core/pages.js';
 import { applyPageMeta, assemblePage } from '../src/core/layout.js';
 import { createMcpServer } from '../src/commands/mcp.js';
 import { buildFlowGraph, layoutFlow, decoratePage } from '../src/core/flows.js';
+import { parseBlocks, serializeBlocks } from '../src/core/blocks.js';
+import matter from 'gray-matter';
 
 function tmpProject() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhyla-test-'));
@@ -126,6 +128,8 @@ describe('build', () => {
     const html = fs.readFileSync(path.join(dist, 'zeta/z-first.html'), 'utf8');
     assert.match(html, /<title>First page · Documentation Standard<\/title>/);
     assert.match(html, /<\/html>\n$/);
+    // Os editores existem só no `rhyla dev`
+    assert.doesNotMatch(html, /\/__rhyla\/|rh-page-edit|rh-flow-edit/);
     assert.doesNotMatch(html, /title: First page/);
   });
 
@@ -442,5 +446,152 @@ describe('flow editor api (dev)', () => {
     assert.equal((await api('/page', 'POST', { slug: 'checkout/review_order' })).status, 409);
     assert.equal((await api('/page', 'POST', { slug: 'zeta/custom' })).status, 409);
     assert.equal((await api('/flow', 'PUT', { slug: 'zeta/custom', title: 'x', steps: [] })).status, 409);
+  });
+});
+
+describe('page editor: markdown ⇄ blocks', () => {
+  const md = createMarkdown({ allowRawHtml: true });
+  const render = (s) => md.render(s).replace(/\s+/g, ' ').replace(/> </g, '><').trim();
+  const roundTrip = (s) => serializeBlocks(parseBlocks(s));
+
+  const cases = {
+    'nested code inside a numbered item': '1. Install\n2. Run:\n   ```bash\n   rhyla init\n   ```\nThen continue.\n',
+    'tab-indented children': '1. Step\n\t```bash\n\trhyla dev\n\t```\n\tMore text\n\t- sub item\n\n2. Next step\n',
+    'setext headings': 'Title\n=====\n\nSub\n---\n\ntext\n',
+    'ordered list starting at 3': '3. three\n4. four\n',
+    'loose list': '- a\n\n- b\n\n- c\n',
+    'hard line break': 'line one  \nline two\nsoft\n',
+    'table with alignment': '| a | b | c |\n|:--|:-:|--:|\n| 1 | 2 | 3 |\n',
+    'raw html block': '<div class="x">\n  <b>hi</b>\n</div>\n\nafter\n',
+    'paragraph that looks like a list': '\\- not a list\n\n1\\. not numbered\n',
+    'todo items': '- [ ] open\n- [x] done\n',
+    'quote with formatting': '> **Note:** read `this`\n> second line\n',
+    'image': '![Diagram](/public/a.png)\n',
+  };
+  for (const [name, src] of Object.entries(cases)) {
+    test(`round-trip keeps the rendered HTML: ${name}`, () => {
+      const out = roundTrip(src);
+      assert.equal(render(out), render(src));
+      assert.equal(roundTrip(out), out, 'second round-trip must not change the markdown');
+    });
+  }
+
+  test('every markdown page of the template survives a round-trip', () => {
+    const files = [];
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) walk(p); else if (e.name.endsWith('.md')) files.push(p);
+    });
+    walk(new URL('../src/templates', import.meta.url).pathname);
+    files.push(new URL('../README.md', import.meta.url).pathname);
+    assert.ok(files.length >= 8);
+    for (const f of files) {
+      const body = matter(fs.readFileSync(f, 'utf8')).content;
+      assert.equal(render(roundTrip(body)), render(body), f);
+    }
+  });
+
+  test('blocks carry indent, numbers and table alignment', () => {
+    const blocks = parseBlocks('2. two\n   - child\n\n| a | b |\n|---|--:|\n| 1 | 2 |\n');
+    assert.deepEqual(blocks.map((b) => [b.type, b.indent]), [['numbered', 0], ['bullet', 1], ['table', 0]]);
+    assert.equal(blocks[0].number, 2);
+    assert.deepEqual(blocks[2].align, ['', 'right']);
+  });
+
+  test('task lists render as checkboxes', () => {
+    const html = createMarkdown().render('- [ ] open\n- [x] done\n');
+    assert.match(html, /<li class="task-item"><input type="checkbox" class="task-check" disabled> open/);
+    assert.match(html, /disabled checked> done/);
+  });
+
+  test('build output is identical after every page goes through the editor', () => {
+    const dir = tmpProject();
+    build({ cwd: dir, quiet: true });
+    const mains = (root) => {
+      const out = {};
+      const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (e.name.endsWith('.html')) out[path.relative(root, p)] = (fs.readFileSync(p, 'utf8').match(/<main[\s\S]*<\/main>/) || [''])[0].replace(/\s+/g, ' ').replace(/> </g, '><');
+      });
+      walk(root);
+      return out;
+    };
+    const before = mains(path.join(dir, 'dist'));
+    const body = path.join(dir, 'rhyla-docs/body');
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) return walk(p);
+      if (!e.name.endsWith('.md')) return;
+      const { data, content } = matter(fs.readFileSync(p, 'utf8'));
+      const out = serializeBlocks(parseBlocks(content));
+      fs.writeFileSync(p, Object.keys(data).length ? matter.stringify(`\n${out}`, data) : out);
+    });
+    walk(body);
+    build({ cwd: dir, quiet: true });
+    const after = mains(path.join(dir, 'dist'));
+    assert.deepEqual(Object.keys(after).sort(), Object.keys(before).sort());
+    for (const k of Object.keys(before)) assert.equal(after[k], before[k], k);
+  });
+});
+
+describe('page editor api (dev)', () => {
+  let server;
+  let base;
+  let dir;
+  const api = (p, method = 'GET', body, headers) => fetch(base + '/__rhyla/api' + p, {
+    method,
+    headers: headers || (body ? { 'content-type': 'application/json' } : undefined),
+    body: body && !(body instanceof Uint8Array) ? JSON.stringify(body) : body,
+  });
+  before(async () => {
+    dir = tmpProject();
+    server = dev({ cwd: dir, port: 0, quiet: true });
+    await new Promise((r) => server.once('listening', r));
+    base = `http://127.0.0.1:${server.address().port}`;
+  });
+  after(() => server.close());
+
+  test('serves the editor and links to it from markdown pages', async () => {
+    assert.equal((await fetch(base + '/__rhyla/page-editor')).status, 200);
+    assert.equal((await fetch(base + '/__rhyla/editor/blocks.js')).status, 200);
+    assert.match(await (await fetch(base + '/zeta/z-first')).text(), /class="rh-page-edit" href="\/__rhyla\/page-editor\?page=zeta%2Fz-first"/);
+    assert.doesNotMatch(await (await fetch(base + '/zeta/custom')).text(), /rh-page-edit/);
+  });
+
+  test('loads a page as blocks', async () => {
+    const data = await (await api('/page?slug=zeta/z-first')).json();
+    assert.equal(data.data.title, 'First page');
+    assert.deepEqual(data.blocks.map((b) => b.type), ['paragraph']);
+    assert.equal((await api('/page?slug=zeta/custom')).status, 400);
+    assert.equal((await api('/page?slug=../../etc/passwd')).status, 400);
+  });
+
+  test('saves markdown and edited properties, keeping the rest of the frontmatter', async () => {
+    const res = await api('/page', 'PUT', { slug: 'flows/publish_docs', markdown: 'New intro.\n', data: { title: 'Ship docs', description: '', order: '2' } });
+    assert.equal(res.status, 200);
+    const { data, content } = matter(fs.readFileSync(path.join(dir, 'rhyla-docs/body/flows/publish_docs.md'), 'utf8'));
+    assert.equal(data.title, 'Ship docs');
+    assert.equal(data.type, 'flow');
+    assert.ok(Array.isArray(data.steps) && data.steps.length > 3);
+    assert.equal(data.order, 2);
+    assert.equal(data.description, undefined);
+    assert.equal(content.trim(), 'New intro.');
+  });
+
+  test('pages without frontmatter stay without frontmatter', async () => {
+    await api('/page', 'PUT', { slug: 'zeta/b-second', markdown: '# Second\n\nMore.\n', data: { title: '', description: '', order: '' } });
+    assert.equal(fs.readFileSync(path.join(dir, 'rhyla-docs/body/zeta/b-second.md'), 'utf8'), '# Second\n\nMore.\n');
+  });
+
+  test('uploads images into public/uploads', async () => {
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+    const res = await api('/upload?name=My Diagram.PNG', 'POST', png, { 'content-type': 'application/octet-stream' });
+    const data = await res.json();
+    assert.equal(data.src, '/public/uploads/my-diagram.png');
+    assert.ok(fs.existsSync(path.join(dir, 'rhyla-docs/public/uploads/my-diagram.png')));
+    const again = await (await api('/upload?name=My Diagram.PNG', 'POST', png, { 'content-type': 'application/octet-stream' })).json();
+    assert.equal(again.src, '/public/uploads/my-diagram-2.png');
+    assert.equal((await api('/upload?name=evil.html', 'POST', png, { 'content-type': 'application/octet-stream' })).status, 400);
   });
 });

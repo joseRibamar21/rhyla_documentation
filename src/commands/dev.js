@@ -155,7 +155,7 @@ export default function dev(opts = {}) {
   });
 
   // Editor de fluxos (interface + API)
-  registerEditorRoutes(app, { bodyPath, context, allPages, log });
+  registerEditorRoutes(app, { bodyPath, publicPath: path.join(rhylaPath, "public"), context, allPages, log });
 
   // Endpoint usado pelo kit_dev_rhyla para gerar arquivos markdown
   app.post("/generate-page", (req, res) => {
@@ -211,7 +211,11 @@ export default function dev(opts = {}) {
     const sidebar = isHome
       ? generateSidebarHTML(bodyPath, null, "home")
       : generateSidebarHTML(bodyPath, resolved.group, resolved.topic);
-    const content = isDevKit ? page.html : decorateOne(ctx, page, resolved.slug).html;
+    let content = isDevKit ? page.html : decorateOne(ctx, page, resolved.slug).html;
+    // Atalho para o editor de páginas (só no dev, só para .md)
+    if (page.markdown !== null) {
+      content = `<div class="rh-page-tools"><a class="rh-page-edit" href="${EDITOR_BASE}/page-editor?page=${encodeURIComponent(resolved.slug)}" data-no-spa>Edit page</a></div>${content}`;
+    }
     res.send(assemblePage(header, sidebar, content));
   });
 

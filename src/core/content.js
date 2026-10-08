@@ -8,7 +8,34 @@ import markdownIt from 'markdown-it';
  * @param {{ allowRawHtml?: boolean }} options
  */
 export function createMarkdown({ allowRawHtml = false } = {}) {
-  return new markdownIt({ html: Boolean(allowRawHtml) });
+  const md = new markdownIt({ html: Boolean(allowRawHtml) });
+  md.core.ruler.push('rhyla_task_lists', taskLists);
+  return md;
+}
+
+/**
+ * Listas de tarefas: "- [ ] item" / "- [x] item" viram checkboxes (só leitura).
+ */
+function taskLists(state) {
+  const tokens = state.tokens;
+  for (let i = 2; i < tokens.length; i++) {
+    const inline = tokens[i];
+    if (inline.type !== 'inline' || tokens[i - 1].type !== 'paragraph_open' || tokens[i - 2].type !== 'list_item_open') continue;
+    const m = inline.content.match(/^\[([ xX])\]\s+/);
+    if (!m) continue;
+    // Remove o "[ ] " dos primeiros tokens de texto (o "[" pode vir separado)
+    let remaining = m[0].length;
+    while (remaining > 0 && inline.children.length && inline.children[0].type === 'text') {
+      const child = inline.children[0];
+      if (child.content.length <= remaining) { remaining -= child.content.length; inline.children.shift(); }
+      else { child.content = child.content.slice(remaining); remaining = 0; }
+    }
+    if (remaining > 0) continue;
+    const box = new state.Token('html_inline', '', 0);
+    box.content = `<input type="checkbox" class="task-check" disabled${m[1] === ' ' ? '' : ' checked'}> `;
+    inline.children.unshift(box);
+    tokens[i - 2].attrJoin('class', 'task-item');
+  }
 }
 
 /**

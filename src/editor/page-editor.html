@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Page editor · Rhyla</title>
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('rhyla-theme'); } catch (e) {}
+      var theme = saved === 'dark' || saved === 'light' ? saved
+        : (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+  <link rel="stylesheet" href="/styles/global.css">
+  <link rel="stylesheet" href="/__rhyla/editor/page-editor.css">
+</head>
+<body class="pe">
+  <header class="pe-top">
+    <a class="pe-back" href="/" id="pe-back" title="Back to the page">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+      Docs
+    </a>
+    <div class="pe-crumb">
+      <svg class="pe-crumb-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>
+      <span id="pe-path"></span>
+    </div>
+    <span class="pe-status" id="pe-status"></span>
+    <div class="pe-actions">
+      <button class="pe-btn" id="pe-undo" title="Undo block change" aria-label="Undo">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+      </button>
+      <button class="pe-btn" id="pe-md-toggle" title="Show the Markdown that will be saved">Markdown</button>
+      <button class="pe-btn" id="pe-new">New page</button>
+      <a class="pe-btn" id="pe-view" href="/" target="_blank">View page ↗</a>
+    </div>
+  </header>
+
+  <div class="pe-main">
+    <main class="pe-scroll" id="pe-scroll">
+      <article class="pe-doc" id="pe-doc">
+        <div class="pe-flow-note" id="pe-flow-note" hidden>
+          This page is a flow. Its steps are edited in the <a id="pe-flow-link" href="#">flow editor</a>; here you edit the text below the diagram.
+        </div>
+        <textarea class="pe-title" id="pe-title" rows="1" placeholder="Untitled" spellcheck="true"></textarea>
+        <div class="pe-props">
+          <label class="pe-prop">
+            <span class="pe-prop-name">Description</span>
+            <input class="pe-prop-input" id="pe-description" placeholder="Empty — shown in search, llms.txt and <meta>">
+          </label>
+          <label class="pe-prop">
+            <span class="pe-prop-name">Order</span>
+            <input class="pe-prop-input pe-prop-short" id="pe-order" type="number" placeholder="Empty — alphabetical">
+          </label>
+          <div class="pe-prop">
+            <span class="pe-prop-name">File</span>
+            <code class="pe-prop-value" id="pe-file"></code>
+          </div>
+        </div>
+        <div class="pe-blocks" id="pe-blocks"></div>
+        <button class="pe-append" id="pe-append" aria-label="Add a block at the end">Click to add a block, or type <kbd class="rh-kbd">/</kbd> for commands</button>
+      </article>
+    </main>
+    <aside class="pe-md" id="pe-md" hidden>
+      <div class="pe-md-head">
+        <strong>Markdown</strong>
+        <span>What will be saved to the .md file</span>
+      </div>
+      <pre id="pe-md-text"></pre>
+    </aside>
+  </div>
+
+  <div class="pe-menu" id="pe-menu" hidden role="listbox"></div>
+
+  <div class="pe-toolbar" id="pe-toolbar" hidden>
+    <button data-format="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+    <button data-format="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+    <button data-format="strike" title="Strikethrough"><s>S</s></button>
+    <button data-format="code" title="Code (Ctrl+E)"><code>&lt;/&gt;</code></button>
+    <button data-format="link" title="Link (Ctrl+K)">Link</button>
+  </div>
+
+  <input type="file" id="pe-file-input" accept="image/*" hidden>
+  <div class="pe-toast" id="pe-toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/__rhyla/editor/page-editor.js"></script>
+</body>
+</html>

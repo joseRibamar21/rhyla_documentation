@@ -36,21 +36,22 @@ A visual editor in `rhyla dev` to build flows without writing YAML. It saves the
 - [ ] Drag to connect and to reorder steps directly on the canvas
 - [ ] Manual positioning for large flows (today the layout is automatic)
 
-## 🔜 Next
-
 ### Page editor (Notion-like)
 
-A block editor in `rhyla dev` for writing pages visually, saving clean Markdown back to `rhyla-docs/body`.
+A block editor in `rhyla dev` for writing pages visually, saving clean Markdown back to `rhyla-docs/body`. Built into Rhyla, no external libraries.
 
-- Blocks: headings, paragraphs, lists, to-dos, quotes, callouts, tables, code (with language), images, dividers
-- `/` slash menu to insert blocks; drag handle to reorder; inline toolbar for bold, italic, code and links
-- Page properties panel at the top for the frontmatter (title, description, order, flow membership)
-- Link to other pages with `@` / `[[` mentions, with autocomplete over the docs
-- Paste Markdown or rich text; drag and drop images into `public/`
-- Autosave to the `.md` file, with reliable Markdown round-trip (no noise in diffs)
-- "Edit" button on every page while running `rhyla dev`; create new pages from the sidebar
-- API endpoint template as a block (method, path, headers, body, responses), replacing today's API Page Generator form
-- Implementation note: evaluate BlockNote, TipTap (ProseMirror) and Milkdown for Markdown fidelity and bundle size
+- [x] Blocks: headings, paragraphs, lists (nested), to-dos, quotes, tables, code (with language), images, dividers, raw HTML
+- [x] `/` slash menu to insert blocks; drag handle to reorder; block menu (turn into, duplicate, move, indent, delete)
+- [x] Inline toolbar and shortcuts for bold, italic, code, strikethrough and links; Markdown typed inline is formatted on the fly
+- [x] Page properties at the top for the frontmatter (title, description, order); other fields preserved
+- [x] Paste Markdown or text; paste or drop images into `public/uploads/`
+- [x] Autosave with Markdown round-trip tested against the build output (same `dist/`)
+- [x] "Edit page" button on every Markdown page while running `rhyla dev`; create new pages from the editor
+- [x] To-do items render as checkboxes in the published site
+- [ ] Link to other pages with `@` / `[[` mentions, with autocomplete over the docs
+- [ ] Callout blocks
+- [ ] API endpoint block (method, path, headers, body, responses), replacing today's API Page Generator form
+- [ ] Create pages from the sidebar while running `rhyla dev`
 
 ## 💡 Later
 
