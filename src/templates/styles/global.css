@@ -507,7 +507,8 @@ pre:hover .rh-copy-btn, .rh-copy-btn:focus-visible { opacity: 1; }
   width: max-content;
   max-width: min(100%, var(--rh-content-width));
   overflow-x: auto;
-  margin: 1.25rem auto;
+  /* Alinha à esquerda da coluna de leitura (que é centralizada) */
+  margin: 1.25rem auto 1.25rem max(0px, calc((100% - var(--rh-content-width)) / 2));
   border-collapse: separate;
   border-spacing: 0;
   border: 1px solid var(--rh-border);
