@@ -10,6 +10,7 @@ import { createIgnoreMatcher } from '../src/core/ignore.js';
 import { createMarkdown, renderFile } from '../src/core/content.js';
 import { listPages, resolvePageFile } from '../src/core/pages.js';
 import { applyPageMeta, assemblePage } from '../src/core/layout.js';
+import { createMcpServer } from '../src/commands/mcp.js';
 
 function tmpProject() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhyla-test-'));
@@ -214,5 +215,83 @@ describe('dev server', () => {
     const ok = await post('/api/post-x');
     assert.equal(ok.status, 200);
     assert.ok(fs.existsSync(path.join(dir, 'rhyla-docs/body/api/post-x.md')));
+  });
+});
+
+describe('mcp server', () => {
+  let dir;
+  let server;
+  const call = (name, args = {}) => server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
+  const json = (res) => JSON.parse(res.result.content[0].text);
+  before(() => {
+    dir = tmpProject();
+    server = createMcpServer({ cwd: dir });
+  });
+
+  test('initialize negotiates the protocol version', () => {
+    const res = server.handle({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } } });
+    assert.equal(res.result.protocolVersion, '2025-06-18');
+    assert.ok(res.result.capabilities.tools);
+    const future = server.handle({ jsonrpc: '2.0', id: 2, method: 'initialize', params: { protocolVersion: '2099-01-01' } });
+    assert.equal(future.result.protocolVersion, '2025-11-25');
+    assert.equal(server.handle({ jsonrpc: '2.0', method: 'notifications/initialized' }), null);
+    assert.equal(server.handle({ jsonrpc: '2.0', id: 3, method: 'nope' }).error.code, -32601);
+  });
+
+  test('lists the tools, without write_page when read-only', () => {
+    const names = server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' }).result.tools.map((t) => t.name);
+    assert.deepEqual(names, ['list_pages', 'read_page', 'search_docs', 'get_conventions', 'write_page']);
+    const ro = createMcpServer({ cwd: dir, readOnly: true });
+    assert.ok(!ro.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' }).result.tools.some((t) => t.name === 'write_page'));
+  });
+
+  test('list_pages, read_page and search_docs', () => {
+    const list = json(call('list_pages', { group: 'zeta' }));
+    assert.deepEqual(list.pages.map((p) => p.route), ['/zeta/z-first', '/zeta/b-second', '/zeta/custom']);
+    assert.ok(!json(call('list_pages')).pages.some((p) => p.route.includes('kit_dev_rhyla')));
+
+    const read = call('read_page', { route: '/zeta/z-first' });
+    assert.equal(JSON.parse(read.result.content[0].text).title, 'First page');
+    assert.match(read.result.content[1].text, /^---\ntitle: First page/);
+
+    const found = json(call('search_docs', { query: 'FIRST page' }));
+    assert.equal(found.results[0].route, '/zeta/z-first');
+  });
+
+  test('tool errors are reported as isError results', () => {
+    assert.equal(call('read_page', { route: '/missing' }).result.isError, true);
+    assert.equal(call('write_page', { path: '../../escape', content: 'x' }).result.isError, true);
+    assert.equal(server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'nope' } }).error.code, -32602);
+  });
+
+  test('write_page creates pages inside body/', () => {
+    const res = json(call('write_page', { path: 'api/users/post-create_user', content: '---\ntitle: Create user\n---\n\n# POST /users' }));
+    assert.equal(res.action, 'created');
+    assert.equal(res.route, '/api/users/post-create_user');
+    assert.ok(fs.existsSync(path.join(dir, 'rhyla-docs/body/api/users/post-create_user.md')));
+    assert.equal(json(call('write_page', { path: 'api/users/post-create_user.md', content: '# Again' })).action, 'updated');
+  });
+
+  test('speaks newline-delimited JSON-RPC over stdio', async () => {
+    const { spawn } = await import('node:child_process');
+    const cli = new URL('../bin/cli.js', import.meta.url).pathname;
+    const child = spawn(process.execPath, [cli, 'mcp', '--dir', dir], { stdio: ['pipe', 'pipe', 'pipe'] });
+    const lines = [];
+    let buf = '';
+    const done = new Promise((resolve) => {
+      child.stdout.on('data', (d) => {
+        buf += d;
+        let i;
+        while ((i = buf.indexOf('\n')) >= 0) { lines.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1); }
+        if (lines.length === 2) resolve();
+      });
+    });
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }) + '\n');
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n');
+    child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'search_docs', arguments: { query: 'second' } } }) + '\n');
+    await done;
+    child.kill();
+    assert.equal(lines[0].result.serverInfo.name, 'rhyla');
+    assert.equal(lines[1].result.structuredContent.results[0].route, '/zeta/b-second');
   });
 });

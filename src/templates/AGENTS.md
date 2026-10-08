@@ -98,6 +98,10 @@ npx rhyla dev     # preview at http://localhost:3333 (re-reads files on every re
 npx rhyla build   # static site in dist/
 ```
 
+## MCP
+
+If the `rhyla` MCP server is connected (`rhyla mcp`), prefer its tools: `search_docs` / `list_pages` to find pages, `read_page` to read, `write_page` to create or update.
+
 ## Machine-readable output
 
 The build (and the dev server) also publishes, for AI agents and tools:

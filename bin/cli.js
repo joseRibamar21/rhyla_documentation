@@ -5,6 +5,7 @@ import init from '../src/commands/init.js';
 import dev from '../src/commands/dev.js';
 import build from '../src/commands/build.js';
 import serve from '../src/commands/serve.js';
+import mcp from '../src/commands/mcp.js';
 
 const { version } = createRequire(import.meta.url)('../package.json');
 
@@ -51,5 +52,12 @@ program
   .option('-d, --dir <dir>', 'Directory to serve (default: dist)', 'dist')
   .option('--no-build', 'Do not run build before serving')
   .action(run(serve));
+
+program
+  .command('mcp')
+  .description('Start an MCP server (stdio) so AI agents can list, search, read and write docs')
+  .option('-d, --dir <dir>', 'Project root containing rhyla-docs/ (default: current directory)')
+  .option('--read-only', 'Expose only read tools (no write_page)')
+  .action(run(mcp));
 
 program.parse(process.argv);

@@ -11,6 +11,7 @@ npx rhyla init    # creates rhyla-docs/
 npx rhyla dev     # preview at http://localhost:3333
 npx rhyla build   # static site in dist/
 npx rhyla serve   # build + serve dist/ under the configured base path
+npx rhyla mcp     # MCP server for AI agents (stdio)
 ```
 
 | Command | Options |
@@ -18,6 +19,7 @@ npx rhyla serve   # build + serve dist/ under the configured base path
 | `init`  | `-f, --force` overwrite template files if `rhyla-docs/` already exists |
 | `dev`   | `-p, --port <port>` (default `3333`), `-H, --host <host>` (default `127.0.0.1`) |
 | `serve` | `-b, --base <base>`, `-p, --port <port>`, `-d, --dir <dir>`, `--no-build` |
+| `mcp`   | `-d, --dir <dir>` project root, `--read-only` |
 
 `rhyla init` creates:
 
@@ -99,7 +101,37 @@ In `rhyla dev`, the **API Page Generator** at `/kit_dev_rhyla/new_rote` builds t
 
 Every HTML page also links its Markdown version with `<link rel="alternate" type="text/markdown">`.
 
-To let a coding agent **write** docs, point it at `rhyla-docs/AGENTS.md`, which documents the layout, frontmatter and naming conventions.
+### MCP server
+
+`rhyla mcp` starts a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio, so agents (Claude Code, Cursor, VS Code…) can work with the docs directly:
+
+| Tool | What it does |
+|------|--------------|
+| `list_pages` | All pages (route, title, description, file), optionally filtered by folder |
+| `search_docs` | Full-text search, case and accent insensitive |
+| `read_page` | Source of a page (Markdown with frontmatter) |
+| `get_conventions` | The project's `AGENTS.md` (layout, frontmatter, naming) |
+| `write_page` | Create or update a Markdown page inside `rhyla-docs/body` |
+
+Claude Code:
+
+```bash
+claude mcp add rhyla -- npx rhyla mcp
+```
+
+Other clients (`.mcp.json`, Cursor, VS Code):
+
+```json
+{
+  "mcpServers": {
+    "rhyla": { "command": "npx", "args": ["rhyla", "mcp"] }
+  }
+}
+```
+
+Options: `--dir <path>` (project root, default: current directory) and `--read-only` (no `write_page`).
+
+Agents that only edit files can follow `rhyla-docs/AGENTS.md`, which documents the layout, frontmatter and naming conventions.
 
 ---
 
