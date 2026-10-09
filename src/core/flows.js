@@ -22,10 +22,12 @@ import { escapeHtml } from './content.js';
 
 const NODE_W = 208;
 const NODE_H = 56;
-const GAP_X = 40;
-const GAP_Y = 72;
-const PAD = 16;
+const GAP_X = 44;
+const GAP_Y = 76;
+const PAD = 20;
 const LANE = 18;
+const DUMMY_W = 8;
+const DUMMY_GAP = 18;
 
 const normSlug = (s) => String(s || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\.(md|html)$/i, '');
 
@@ -123,19 +125,25 @@ export function neighbors(flow, stepId) {
 }
 
 /**
- * Layout em camadas (top-down): cada passo fica na camada do caminho mais longo a partir do início;
- * arestas que voltam (ciclos) são desenhadas por uma faixa à direita.
+ * Layout em camadas (Sugiyama), de cima para baixo:
+ * 1. arestas que voltam (ciclos) saem do layout e viram faixas à direita;
+ * 2. cada passo vai para a camada do caminho mais longo a partir do início;
+ * 3. arestas longas ganham nós "fantasma" nas camadas do meio (descem pelo próprio caminho);
+ * 4. a ordem em cada camada é otimizada para reduzir cruzamentos;
+ * 5. as posições horizontais são alinhadas aos vizinhos, respeitando o espaçamento.
  */
 export function layoutFlow(flow) {
   const steps = flow.steps;
   const byId = new Map(steps.map((s) => [s.id, s]));
   const order = new Map(steps.map((s, i) => [s.id, i]));
 
-  // 1. Classifica arestas de retorno (DFS a partir do início, depois dos passos não alcançados)
+  // 1. Arestas de retorno (DFS) e ordem de descoberta
   const state = new Map();
   const back = new Set();
+  const discovered = new Map();
   const visit = (id) => {
     state.set(id, 1);
+    discovered.set(id, discovered.size);
     for (const n of byId.get(id).next) {
       const st = state.get(n.to);
       if (st === 1) back.add(`${id}>${n.to}`);
@@ -143,10 +151,10 @@ export function layoutFlow(flow) {
     }
     state.set(id, 2);
   };
-  if (flow.start) visit(flow.start);
+  if (flow.start && byId.has(flow.start)) visit(flow.start);
   steps.forEach((s) => { if (!state.get(s.id)) visit(s.id); });
 
-  // 2. Camadas pelo caminho mais longo nas arestas para frente (ordem topológica de Kahn)
+  // 2. Camadas pelo caminho mais longo (ordem topológica de Kahn)
   const forward = (s) => s.next.filter((n) => !back.has(`${s.id}>${n.to}`));
   const indeg = new Map(steps.map((s) => [s.id, 0]));
   steps.forEach((s) => forward(s).forEach((n) => indeg.set(n.to, indeg.get(n.to) + 1)));
@@ -161,98 +169,231 @@ export function layoutFlow(flow) {
     }
   }
 
-  // 3. Ordem dentro da camada: média da posição dos pais (reduz cruzamentos)
-  const layers = [];
-  steps.forEach((s) => { (layers[rank.get(s.id)] ||= []).push(s.id); });
-  const posInLayer = new Map();
-  layers.forEach((layer, r) => {
-    if (r > 0) {
-      const parentsOf = (id) => steps.filter((p) => forward(p).some((n) => n.to === id)).map((p) => posInLayer.get(p.id) ?? 0);
-      const score = (id) => { const ps = parentsOf(id); return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : order.get(id); };
-      layer.sort((a, b) => score(a) - score(b) || order.get(a) - order.get(b));
-    }
-    layer.forEach((id, i) => posInLayer.set(id, i - (layer.length - 1) / 2));
-  });
-
-  // 4. Coordenadas
-  const widest = Math.max(1, ...layers.map((l) => (l ? l.length : 0)));
-  const contentW = widest * NODE_W + (widest - 1) * GAP_X;
-  const backEdges = [];
-  steps.forEach((s) => s.next.forEach((n) => { if (back.has(`${s.id}>${n.to}`)) backEdges.push({ from: s.id, to: n.to, label: n.label }); }));
-  // Arestas de retorno com rótulo ficam nas faixas mais externas (o texto não é cruzado por outras)
-  backEdges.sort((a, b) => Number(Boolean(a.label)) - Number(Boolean(b.label)));
-  const edges = [];
-  steps.forEach((s) => forward(s).forEach((n) => edges.push({ from: s.id, to: n.to, label: n.label, skip: rank.get(n.to) - rank.get(s.id) > 1 })));
-
+  // 3. Grafo em camadas com nós fantasma
   const nodes = new Map();
-  layers.forEach((layer, r) => {
-    (layer || []).forEach((id) => {
-      const cx = PAD + contentW / 2 + posInLayer.get(id) * (NODE_W + GAP_X);
-      nodes.set(id, { id, x: cx - NODE_W / 2, y: PAD + r * (NODE_H + GAP_Y), w: NODE_W, h: NODE_H, rank: r });
+  steps.forEach((s) => nodes.set(s.id, { id: s.id, rank: rank.get(s.id), w: NODE_W, h: NODE_H, dummy: false }));
+  const edges = [];
+  const backEdges = [];
+  let dummies = 0;
+  steps.forEach((s) => s.next.forEach((n) => {
+    if (back.has(`${s.id}>${n.to}`)) { backEdges.push({ from: s.id, to: n.to, label: n.label }); return; }
+    const r0 = rank.get(s.id);
+    const r1 = rank.get(n.to);
+    const chain = [s.id];
+    for (let r = r0 + 1; r < r1; r++) {
+      const id = `~${dummies++}`;
+      nodes.set(id, { id, rank: r, w: DUMMY_W, h: NODE_H, dummy: true });
+      chain.push(id);
+    }
+    chain.push(n.to);
+    edges.push({ from: s.id, to: n.to, label: n.label, skip: r1 - r0 > 1, chain });
+  }));
+  const up = new Map([...nodes.keys()].map((id) => [id, []]));
+  const down = new Map([...nodes.keys()].map((id) => [id, []]));
+  edges.forEach((e) => e.chain.slice(1).forEach((id, k) => { down.get(e.chain[k]).push(id); up.get(id).push(e.chain[k]); }));
+
+  // 4. Ordem nas camadas: barycentro em varreduras alternadas, guardando a de menos cruzamentos
+  const layerCount = Math.max(0, ...[...nodes.values()].map((n) => n.rank)) + 1;
+  let layers = Array.from({ length: layerCount }, () => []);
+  nodes.forEach((n) => layers[n.rank].push(n.id));
+  const pos = new Map();
+  const index = () => layers.forEach((l) => l.forEach((id, i) => pos.set(id, i)));
+  const firstSeen = (id) => (nodes.get(id).dummy ? Infinity : (discovered.get(id) ?? order.get(id)));
+  layers.forEach((l) => l.sort((a, b) => firstSeen(a) - firstSeen(b)));
+  index();
+  const sortLayer = (r, nb) => {
+    const keyed = layers[r].map((id, i) => {
+      const list = nb.get(id);
+      return { id, i, k: list.length ? list.reduce((t, x) => t + pos.get(x), 0) / list.length : i };
     });
-  });
-
-  // Arestas que pulam camadas contornam, pela esquerda, os nós das camadas intermediárias
-  let used = 0;
-  edges.forEach((e) => {
-    if (!e.skip) return;
-    const a = nodes.get(e.from), b = nodes.get(e.to);
-    const between = [...nodes.values()].filter((n) => n.rank > a.rank && n.rank < b.rank);
-    const minX = Math.min(a.x + a.w / 2, b.x + b.w / 2, ...between.map((n) => n.x));
-    e.lane = minX - 18 - used++ * LANE;
-  });
-  const minLane = Math.min(PAD, ...edges.filter((e) => e.skip).map((e) => e.lane - 8));
-  const shift = PAD - minLane;
-  if (shift > 0) {
-    nodes.forEach((n) => { n.x += shift; });
-    edges.forEach((e) => { if (e.skip) e.lane += shift; });
+    keyed.sort((a, b) => a.k - b.k || a.i - b.i);
+    layers[r] = keyed.map((x) => x.id);
+    layers[r].forEach((id, i) => pos.set(id, i));
+  };
+  const crossings = () => {
+    let c = 0;
+    for (let r = 0; r < layerCount - 1; r++) {
+      const es = [];
+      layers[r].forEach((a) => down.get(a).forEach((b) => es.push([pos.get(a), pos.get(b)])));
+      for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) if ((es[i][0] - es[j][0]) * (es[i][1] - es[j][1]) < 0) c++;
+    }
+    return c;
+  };
+  for (let r = 1; r < layerCount; r++) sortLayer(r, up);
+  let best = layers.map((l) => l.slice());
+  let bestCrossings = crossings();
+  for (let it = 0; it < 16 && bestCrossings > 0; it++) {
+    if (it % 2) for (let r = layerCount - 2; r >= 0; r--) sortLayer(r, down);
+    else for (let r = 1; r < layerCount; r++) sortLayer(r, up);
+    const c = crossings();
+    if (c < bestCrossings) { bestCrossings = c; best = layers.map((l) => l.slice()); }
   }
+  layers = best;
+  index();
 
-  const backLabel = backEdges.some((e) => e.label) ? 56 : 0;
-  const contentRight = shift + PAD + contentW;
-  const width = contentRight + PAD + (backEdges.length ? backEdges.length * LANE + 8 + backLabel : 0);
-  const height = PAD * 2 + layers.length * NODE_H + (layers.length - 1) * GAP_Y;
-  return { nodes, edges, backEdges, width, height, contentRight };
+  // 5. Posição horizontal: cada nó tenta ficar alinhado aos vizinhos sem invadir o espaço dos outros
+  const gap = (a, b) => (nodes.get(a).dummy || nodes.get(b).dummy ? DUMMY_GAP : GAP_X);
+  const cx = new Map();
+  layers.forEach((layer) => {
+    let x = 0;
+    layer.forEach((id, i) => {
+      if (i) x += gap(layer[i - 1], id);
+      cx.set(id, x + nodes.get(id).w / 2);
+      x += nodes.get(id).w;
+    });
+    const half = x / 2;
+    layer.forEach((id) => cx.set(id, cx.get(id) - half));
+  });
+  const place = (layer, desired) => {
+    const w = (i) => nodes.get(layer[i]).w;
+    const sep = (i) => w(i) / 2 + gap(layer[i], layer[i + 1]) + w(i + 1) / 2;
+    const a = desired.slice();
+    for (let i = 1; i < a.length; i++) a[i] = Math.max(a[i], a[i - 1] + sep(i - 1));
+    const b = desired.slice();
+    for (let i = b.length - 2; i >= 0; i--) b[i] = Math.min(b[i], b[i + 1] - sep(i));
+    // A média de duas posições válidas também é válida (e fica equilibrada)
+    layer.forEach((id, i) => cx.set(id, (a[i] + b[i]) / 2));
+  };
+  for (let it = 0; it < 24; it++) {
+    const both = it >= 16;
+    const downward = it % 2 === 0;
+    const rs = layers.map((_, r) => r);
+    if (!downward) rs.reverse();
+    for (const r of rs) {
+      const layer = layers[r];
+      const desired = layer.map((id) => {
+        const nb = both ? [...up.get(id), ...down.get(id)] : (downward ? up : down).get(id);
+        return nb.length ? nb.reduce((t, x) => t + cx.get(x), 0) / nb.length : cx.get(id);
+      });
+      place(layer, desired);
+    }
+  }
+  const minLeft = Math.min(...[...nodes.values()].map((n) => cx.get(n.id) - n.w / 2));
+  nodes.forEach((n) => {
+    n.x = Math.round(cx.get(n.id) - n.w / 2 - minLeft + PAD);
+    n.y = PAD + n.rank * (NODE_H + GAP_Y);
+  });
+
+  // Portas: várias arestas num mesmo nó saem/chegam em pontos diferentes, na ordem dos destinos
+  const ports = (list, side) => {
+    const n = nodes.get(side === 'out' ? list[0].from : list[0].to);
+    const spread = Math.min(26, (n.w * 0.7) / Math.max(1, list.length));
+    list.sort((e1, e2) => {
+      const other = (e) => nodes.get(side === 'out' ? e.chain[1] : e.chain[e.chain.length - 2]);
+      return (other(e1).x + other(e1).w / 2) - (other(e2).x + other(e2).w / 2);
+    });
+    list.forEach((e, i) => { e[side] = Math.round(n.x + n.w / 2 + (i - (list.length - 1) / 2) * spread); });
+  };
+  const group = (key) => {
+    const m = new Map();
+    edges.forEach((e) => { if (!m.has(e[key])) m.set(e[key], []); m.get(e[key]).push(e); });
+    return m;
+  };
+  group('from').forEach((list) => ports(list, 'out'));
+  group('to').forEach((list) => ports(list, 'in'));
+  edges.forEach((e) => {
+    const a = nodes.get(e.from);
+    const b = nodes.get(e.to);
+    e.points = [{ x: e.out, y: a.y + a.h }];
+    e.chain.slice(1, -1).forEach((id) => {
+      const d = nodes.get(id);
+      e.points.push({ x: d.x + d.w / 2, y: d.y }, { x: d.x + d.w / 2, y: d.y + d.h });
+    });
+    e.points.push({ x: e.in, y: b.y });
+  });
+
+  // Retornos: faixas à direita de tudo; os com rótulo nas faixas mais externas
+  backEdges.sort((a, b) => Number(Boolean(a.label)) - Number(Boolean(b.label)));
+  const right = Math.max(...[...nodes.values()].map((n) => n.x + n.w));
+  backEdges.forEach((e, i) => {
+    const a = nodes.get(e.from);
+    const b = nodes.get(e.to);
+    e.lane = right + 28 + i * LANE;
+    const sy = a.y + a.h / 2 + (a === b ? -8 : 6);
+    const ty = b.y + b.h / 2 - (a === b ? -8 : 6);
+    e.points = [{ x: a.x + a.w, y: sy }, { x: e.lane, y: sy }, { x: e.lane, y: ty }, { x: b.x + b.w, y: ty }];
+  });
+
+  const laneRight = backEdges.length ? right + 28 + (backEdges.length - 1) * LANE + (backEdges.some((e) => e.label) ? 64 : 12) : right;
+  const width = Math.round(laneRight + PAD);
+  const height = PAD * 2 + layerCount * NODE_H + (layerCount - 1) * GAP_Y;
+  return { nodes, edges, backEdges, width, height, crossings: bestCrossings };
+}
+
+// Curva suave entre pontos (fluxo vertical): trechos retos nos nós fantasma
+function curvePath(points) {
+  let d = `M${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    if (a.x === b.x) { d += ` L${b.x} ${b.y}`; continue; }
+    const dy = (b.y - a.y) / 2;
+    d += ` C${a.x} ${a.y + dy} ${b.x} ${b.y - dy} ${b.x} ${b.y}`;
+  }
+  return d;
+}
+
+// Linha ortogonal com cantos arredondados (retornos)
+function roundedPath(points, r = 10) {
+  let d = `M${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length - 1; i++) {
+    const p = points[i - 1];
+    const c = points[i];
+    const n = points[i + 1];
+    const k1 = Math.min(r, Math.hypot(c.x - p.x, c.y - p.y) / 2);
+    const k2 = Math.min(r, Math.hypot(n.x - c.x, n.y - c.y) / 2);
+    const ux = Math.sign(c.x - p.x), uy = Math.sign(c.y - p.y);
+    const vx = Math.sign(n.x - c.x), vy = Math.sign(n.y - c.y);
+    d += ` L${c.x - ux * k1} ${c.y - uy * k1} Q${c.x} ${c.y} ${c.x + vx * k2} ${c.y + vy * k2}`;
+  }
+  const last = points[points.length - 1];
+  return `${d} L${last.x} ${last.y}`;
+}
+
+function labelPill(text, x, y, edgeKey) {
+  const t = clip(text, 22);
+  const w = Math.round(t.length * 6.4 + 16);
+  return `<g class="rh-flow-pill" data-edge="${escapeHtml(edgeKey)}"><rect x="${Math.round(x - w / 2)}" y="${Math.round(y - 10)}" width="${w}" height="20" rx="10"/><text x="${Math.round(x)}" y="${Math.round(y)}">${escapeHtml(t)}</text></g>`;
 }
 
 /**
  * Diagrama SVG do fluxo. Passos com página viram links.
+ * Arestas e nós carregam data-* (data-step, data-from/data-to, data-edge) para destaque e para o editor.
  * @param {object} flow
  * @param {{ hrefFor: (slug: string) => string, currentStepId?: string, idSuffix?: string }} options
  */
 export function renderFlowDiagram(flow, { hrefFor, currentStepId, idSuffix = '' } = {}) {
   if (!flow.steps.length) return '';
-  const { nodes, edges, backEdges, width, height, contentRight } = layoutFlow(flow);
+  const { nodes, edges, backEdges, width, height } = layoutFlow(flow);
   const marker = `rh-flow-arrow-${flow.slug.replace(/[^a-z0-9]+/gi, '-')}${idSuffix}`;
   const out = [];
+  const pills = [];
 
   out.push(`<svg class="rh-flow-svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${escapeHtml(flow.title)} flow">`);
-  out.push(`<defs><marker id="${marker}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>`);
+  out.push(`<defs><marker id="${marker}" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M2 1L8.5 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></marker></defs>`);
 
-  // Arestas para frente: desce, anda na horizontal no meio do vão, desce até o alvo
+  const link = (e, d, back) => {
+    const key = `${e.from}>${e.to}`;
+    const attrs = `data-from="${escapeHtml(e.from)}" data-to="${escapeHtml(e.to)}" data-edge="${escapeHtml(key)}"`;
+    return `<g class="rh-flow-link${back ? ' is-back' : ''}" ${attrs}><path class="rh-flow-edge${back ? ' rh-flow-edge--back' : ''}" d="${d}" marker-end="url(#${marker})"/><path class="rh-flow-hit" d="${d}"/></g>`;
+  };
+
   for (const e of edges) {
-    const a = nodes.get(e.from);
-    const b = nodes.get(e.to);
-    const sx = a.x + a.w / 2, sy = a.y + a.h;
-    const tx = b.x + b.w / 2, ty = b.y - 3;
-    const midY = sy + GAP_Y / 2 - 6;
-    const entryY = b.y - GAP_Y / 2 + 6;
-    let d;
-    if (e.skip) d = `M${sx} ${sy} V${midY} H${e.lane} V${entryY} H${tx} V${ty}`;
-    else d = sx === tx ? `M${sx} ${sy} V${ty}` : `M${sx} ${sy} V${midY} H${tx} V${ty}`;
-    out.push(`<path class="rh-flow-edge" d="${d}" marker-end="url(#${marker})"/>`);
-    if (e.label) out.push(`<text class="rh-flow-label" x="${tx + 6}" y="${ty - 10}">${escapeHtml(clip(e.label, 22))}</text>`);
+    const pts = e.points.map((p, i) => (i === e.points.length - 1 ? { x: p.x, y: p.y - 2 } : p));
+    out.push(link(e, curvePath(pts), false));
+    if (e.label) {
+      // Rótulo no primeiro trecho, perto de quem decide
+      const a = e.points[0];
+      const b = e.points[1];
+      pills.push(labelPill(e.label, (a.x + b.x) / 2, (a.y + b.y) / 2 + (a.x === b.x ? -4 : 0), `${e.from}>${e.to}`));
+    }
   }
-
-  // Arestas de retorno: saem pela direita e voltam por uma faixa lateral
-  backEdges.forEach((e, i) => {
-    const a = nodes.get(e.from);
-    const b = nodes.get(e.to);
-    const lane = contentRight + 8 + (i + 1) * LANE;
-    const sy = a.y + a.h / 2 + 6, ty = b.y + b.h / 2 - 6;
-    out.push(`<path class="rh-flow-edge rh-flow-edge--back" d="M${a.x + a.w} ${sy} H${lane} V${ty} H${b.x + b.w + 3}" marker-end="url(#${marker})"/>`);
-    if (e.label) out.push(`<text class="rh-flow-label" x="${lane + 6}" y="${(sy + ty) / 2}" dominant-baseline="central">${escapeHtml(clip(e.label, 10))}</text>`);
-  });
+  for (const e of backEdges) {
+    const pts = e.points.map((p, i) => (i === e.points.length - 1 ? { x: p.x + 2, y: p.y } : p));
+    out.push(link(e, roundedPath(pts), true));
+    if (e.label) pills.push(labelPill(e.label, e.lane, (e.points[1].y + e.points[2].y) / 2, `${e.from}>${e.to}`));
+  }
+  out.push(...pills);
 
   for (const step of flow.steps) {
     const n = nodes.get(step.id);

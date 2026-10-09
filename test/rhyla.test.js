@@ -11,7 +11,7 @@ import { createMarkdown, renderFile } from '../src/core/content.js';
 import { listPages, resolvePageFile } from '../src/core/pages.js';
 import { applyPageMeta, assemblePage } from '../src/core/layout.js';
 import { createMcpServer } from '../src/commands/mcp.js';
-import { buildFlowGraph, layoutFlow, decoratePage } from '../src/core/flows.js';
+import { buildFlowGraph, layoutFlow, decoratePage, renderFlowDiagram } from '../src/core/flows.js';
 import { parseBlocks, serializeBlocks } from '../src/core/blocks.js';
 import matter from 'gray-matter';
 
@@ -336,6 +336,46 @@ describe('flows', () => {
     assert.deepEqual(['a', 'b', 'c'].map((id) => layout.nodes.get(id).rank), [0, 1, 2]);
     assert.deepEqual(layout.backEdges.map((e) => `${e.from}>${e.to}`), ['c>a']);
     assert.ok(layout.edges.find((e) => e.from === 'a' && e.to === 'c').skip);
+  });
+
+  test('layout routes long edges through their own path, without crossings or shared ports', () => {
+    // Cenário real: uma decisão nova ligada a passos de várias camadas
+    const { flows } = buildFlowGraph([flowPage([
+      { id: 'login', next: [{ to: 'cart', label: 'yes' }, { to: 'create', label: 'no' }] },
+      { id: 'create', next: 'cart' },
+      { id: 'cart', next: 'pay' },
+      { id: 'pay', next: [{ to: 'done', label: 'ok' }, { to: 'declined', label: 'declined' }] },
+      { id: 'done' },
+      { id: 'declined', next: { to: 'pay', label: 'retry' } },
+      { id: 'decision', next: ['cart', 'pay', 'list'] },
+      { id: 'list' },
+    ])]);
+    const layout = layoutFlow(flows[0]);
+    assert.equal(layout.crossings, 0);
+    const real = [...layout.nodes.values()].filter((n) => !n.dummy);
+    // Nenhum nó se sobrepõe
+    for (const a of real) for (const b of real) {
+      if (a === b || a.rank !== b.rank) continue;
+      assert.ok(a.x + a.w <= b.x || b.x + b.w <= a.x, `${a.id} overlaps ${b.id}`);
+    }
+    // Arestas longas passam por pontos próprios entre as camadas (sem faixa lateral)
+    const long = layout.edges.find((e) => e.from === 'decision' && e.to === 'pay');
+    assert.ok(long.skip && long.points.length > 2);
+    const left = Math.min(...real.map((n) => n.x));
+    assert.ok(long.points.every((p) => p.x >= left), 'long edges stay inside the diagram');
+    // Arestas que chegam ao mesmo passo entram por pontos diferentes
+    const into = layout.edges.filter((e) => e.to === 'cart').map((e) => e.in);
+    assert.equal(new Set(into).size, into.length);
+    assert.deepEqual(layout.backEdges.map((e) => `${e.from}>${e.to}`), ['declined>pay']);
+  });
+
+  test('diagram exposes steps and connections for highlighting and the editor', () => {
+    const pages = [page('a'), page('b'), flowPage([{ id: 'x', page: 'a', next: { to: 'y', label: 'go' } }, { id: 'y', page: 'b', next: 'x' }])];
+    const svg = renderFlowDiagram(buildFlowGraph(pages).flows[0], links);
+    assert.match(svg, /class="rh-flow-link" data-from="x" data-to="y" data-edge="x&gt;y"/);
+    assert.match(svg, /class="rh-flow-link is-back" data-from="y" data-to="x"/);
+    assert.match(svg, /class="rh-flow-pill" data-edge="x&gt;y">.*<text[^>]*>go<\/text>/);
+    assert.match(svg, /class="rh-flow-hit"/);
   });
 
   test('decorates flow pages and member pages', () => {
