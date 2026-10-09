@@ -12,6 +12,7 @@
   let flow = { slug: '', title: '', description: '', start: '', body: '', steps: [] };
   let isNew = true;
   let selected = null;     // id do passo selecionado
+  let selectedEdge = null; // { from, to } da conexão selecionada
   let connecting = false;  // modo "clique no destino para conectar"
   let dirty = false;
   let pages = [];
@@ -23,6 +24,9 @@
   const stepById = (id) => flow.steps.find((s) => s.id === id);
   const pageBySlug = (slug) => pages.find((p) => p.slug === slug);
   const snapshot = () => JSON.stringify({ flow, selected });
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const edgeKey = (e) => `${e.from}>${e.to}`;
+  const edgeOf = (from, to) => { const s = stepById(from); return s && s.next.find((n) => n.to === to); };
 
   function setDirty(v) {
     dirty = v;
@@ -114,12 +118,31 @@
 
   function decorateCanvas() {
     const start = flow.start || (flow.steps[0] && flow.steps[0].id);
+    const svg = $('fe-stage').querySelector('svg');
+    if (svg) svg.querySelectorAll('.fe-port').forEach((p) => p.remove());
     $('fe-stage').querySelectorAll('[data-step]').forEach((node) => {
       const id = node.getAttribute('data-step');
       node.classList.toggle('is-selected', id === selected);
       node.classList.toggle('is-start', id === start);
       node.setAttribute('tabindex', '0');
       node.setAttribute('role', 'button');
+      // Alça embaixo do passo: arraste até outro passo para conectar
+      const rect = node.querySelector('rect');
+      if (svg && rect) {
+        const port = document.createElementNS(SVG_NS, 'circle');
+        port.setAttribute('class', `fe-port${id === selected ? ' is-visible' : ''}`);
+        port.setAttribute('cx', Number(rect.getAttribute('x')) + Number(rect.getAttribute('width')) / 2);
+        port.setAttribute('cy', Number(rect.getAttribute('y')) + Number(rect.getAttribute('height')));
+        port.setAttribute('r', '7');
+        port.setAttribute('data-port', id);
+        const title = document.createElementNS(SVG_NS, 'title');
+        title.textContent = 'Drag to connect';
+        port.appendChild(title);
+        svg.appendChild(port);
+      }
+    });
+    $('fe-stage').querySelectorAll('.rh-flow-link, .rh-flow-pill').forEach((l) => {
+      l.classList.toggle('is-selected', Boolean(selectedEdge) && l.getAttribute('data-edge') === edgeKey(selectedEdge));
     });
     applyZoom();
   }
@@ -148,9 +171,52 @@
 
   function select(id) {
     selected = id && stepById(id) ? id : null;
+    selectedEdge = null;
     setConnecting(false);
     renderPanel();
     decorateCanvas();
+  }
+
+  function selectEdge(from, to) {
+    if (!edgeOf(from, to)) return select(null);
+    selected = null;
+    selectedEdge = { from, to };
+    setConnecting(false);
+    renderPanel();
+    decorateCanvas();
+  }
+
+  function deleteEdge(from, to) {
+    const step = stepById(from);
+    if (!step) return;
+    mutate(() => { step.next = step.next.filter((n) => n.to !== to); selectedEdge = null; });
+    toast('Connection removed');
+  }
+
+  function reverseEdge(from, to) {
+    const a = stepById(from);
+    const b = stepById(to);
+    const e = edgeOf(from, to);
+    if (!a || !b || !e) return;
+    mutate(() => {
+      a.next = a.next.filter((n) => n.to !== to);
+      if (!b.next.some((n) => n.to === from)) b.next.push({ to: from, label: e.label });
+      selectedEdge = { from: to, to: from };
+    });
+  }
+
+  /** Coloca um passo novo no meio da conexão from → to. */
+  function insertBetween(from, to, step) {
+    const a = stepById(from);
+    const e = edgeOf(from, to);
+    if (!a || !e) return;
+    mutate(() => {
+      flow.steps.splice(flow.steps.indexOf(a) + 1, 0, step);
+      e.to = step.id;
+      step.next = [{ to, label: '' }];
+      selectedEdge = null;
+      selected = step.id;
+    });
   }
 
   function connect(fromId, toId) {
@@ -163,6 +229,13 @@
 
   $('fe-stage').addEventListener('click', (e) => {
     e.preventDefault(); // os nós são links para as páginas
+    if (panMoved || e.target.closest('.fe-port')) return;
+    const link = e.target.closest('.rh-flow-link, .rh-flow-pill');
+    if (link && !connecting) {
+      const [from, to] = link.getAttribute('data-edge').split('>');
+      selectEdge(from, to);
+      return;
+    }
     const node = e.target.closest('[data-step]');
     if (!node) { if (!connecting) select(null); return; }
     const id = node.getAttribute('data-step');
@@ -174,7 +247,129 @@
     const step = node && stepById(node.getAttribute('data-step'));
     if (step && step.page) window.open(pageHref(step.page), '_blank');
   });
-  $('fe-canvas').addEventListener('click', (e) => { if (e.target === $('fe-canvas') && !connecting) select(null); });
+  $('fe-canvas').addEventListener('click', (e) => { if (e.target === $('fe-canvas') && !connecting && !panMoved) select(null); });
+
+  // ===== Arrastar a alça para conectar =====
+  let drag = null; // { from, svg, line, x0, y0 }
+  const svgPoint = (svg, ev) => {
+    const pt = svg.createSVGPoint();
+    pt.x = ev.clientX;
+    pt.y = ev.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  };
+
+  $('fe-stage').addEventListener('pointerdown', (e) => {
+    const port = e.target.closest('.fe-port');
+    if (!port || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const svg = port.ownerSVGElement;
+    const line = document.createElementNS(SVG_NS, 'path');
+    line.setAttribute('class', 'fe-temp-edge');
+    svg.appendChild(line);
+    drag = { from: port.getAttribute('data-port'), svg, line, x0: Number(port.getAttribute('cx')), y0: Number(port.getAttribute('cy')) };
+    port.classList.add('is-active');
+    document.body.classList.add('fe-dragging');
+    $('fe-hint').textContent = 'Drop on a step to connect · drop on empty space to add a new step';
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const p = svgPoint(drag.svg, e);
+    const dy = Math.max(30, (p.y - drag.y0) / 2);
+    drag.line.setAttribute('d', `M${drag.x0} ${drag.y0} C${drag.x0} ${drag.y0 + dy} ${p.x} ${p.y - dy} ${p.x} ${p.y}`);
+    const over = document.elementFromPoint(e.clientX, e.clientY);
+    const target = over && over.closest && over.closest('.fe-stage [data-step]');
+    $('fe-stage').querySelectorAll('.is-drop-target').forEach((n) => n.classList.remove('is-drop-target'));
+    if (target && target.getAttribute('data-step') !== drag.from) target.classList.add('is-drop-target');
+  });
+
+  window.addEventListener('pointerup', (e) => {
+    if (!drag) return;
+    const { from, line } = drag;
+    drag = null;
+    line.remove();
+    document.body.classList.remove('fe-dragging');
+    $('fe-hint').textContent = '';
+    $('fe-stage').querySelectorAll('.is-drop-target, .fe-port.is-active').forEach((n) => n.classList.remove('is-drop-target', 'is-active'));
+    const over = document.elementFromPoint(e.clientX, e.clientY);
+    const target = over && over.closest && over.closest('.fe-stage [data-step]');
+    if (target) {
+      const to = target.getAttribute('data-step');
+      if (to !== from) connect(from, to);
+      return;
+    }
+    // Soltou no vazio: cria um passo novo já conectado
+    if (over && over.closest && over.closest('#fe-canvas')) {
+      selected = from;
+      selectedEdge = null;
+      renderPanel();
+      decorateCanvas();
+      openPicker('add');
+    }
+  });
+
+  // ===== Mover o canvas arrastando o fundo; Ctrl + roda = zoom =====
+  let pan = null;
+  let panMoved = false;
+  $('fe-canvas').addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || drag) return;
+    if (e.target.closest('[data-step], .rh-flow-link, .rh-flow-pill, .fe-port, .fe-tools, .fe-zoom, .fe-empty')) return;
+    const c = $('fe-canvas');
+    pan = { x: e.clientX, y: e.clientY, left: c.scrollLeft, top: c.scrollTop };
+    panMoved = false;
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!pan) return;
+    const dx = e.clientX - pan.x;
+    const dy = e.clientY - pan.y;
+    if (!panMoved && Math.hypot(dx, dy) < 4) return;
+    panMoved = true;
+    const c = $('fe-canvas');
+    c.classList.add('is-panning');
+    c.scrollLeft = pan.left - dx;
+    c.scrollTop = pan.top - dy;
+  });
+  window.addEventListener('pointerup', () => {
+    if (!pan) return;
+    pan = null;
+    $('fe-canvas').classList.remove('is-panning');
+    // O clique que encerra o arrasto não deve desmarcar a seleção
+    setTimeout(() => { panMoved = false; }, 0);
+  });
+  $('fe-canvas').addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    setZoom(zoom * (1 - Math.max(-0.25, Math.min(0.25, e.deltaY * 0.002))));
+  }, { passive: false });
+
+  // ===== Destaque ao passar o mouse (igual ao site) =====
+  function focusFlow(svg, target) {
+    svg.querySelectorAll('.is-related').forEach((n) => n.classList.remove('is-related'));
+    if (!target || drag) { svg.classList.remove('is-focusing'); return; }
+    svg.classList.add('is-focusing');
+    const q = (v) => (window.CSS && CSS.escape ? CSS.escape(v) : v);
+    const mark = (sel) => svg.querySelectorAll(sel).forEach((n) => n.classList.add('is-related'));
+    const step = target.getAttribute('data-step') || target.getAttribute('data-port');
+    if (step) {
+      mark(`[data-step="${q(step)}"]`);
+      svg.querySelectorAll(`.rh-flow-link[data-from="${q(step)}"], .rh-flow-link[data-to="${q(step)}"]`).forEach((l) => {
+        l.classList.add('is-related');
+        mark(`.rh-flow-pill[data-edge="${q(l.getAttribute('data-edge'))}"], [data-step="${q(l.getAttribute('data-from'))}"], [data-step="${q(l.getAttribute('data-to'))}"]`);
+      });
+    } else {
+      const [from, to] = target.getAttribute('data-edge').split('>');
+      mark(`[data-edge="${q(target.getAttribute('data-edge'))}"], [data-step="${q(from)}"], [data-step="${q(to)}"]`);
+    }
+  }
+  $('fe-stage').addEventListener('mouseover', (e) => {
+    const svg = e.target.closest('.rh-flow-svg');
+    if (svg) focusFlow(svg, e.target.closest('[data-step], [data-port], .rh-flow-link, .rh-flow-pill'));
+  });
+  $('fe-stage').addEventListener('mouseleave', () => {
+    const svg = $('fe-stage').querySelector('.rh-flow-svg');
+    if (svg) focusFlow(svg, null);
+  });
 
   // ===== Painel =====
   function stepTitle(step) {
@@ -190,7 +385,8 @@
     open.hidden = isNew;
     open.href = pageHref(flow.slug);
     $('fe-back').href = isNew ? '/' : pageHref(flow.slug);
-    $('fe-panel').innerHTML = selected ? stepPanel(stepById(selected)) : flowPanel();
+    if (selectedEdge && !edgeOf(selectedEdge.from, selectedEdge.to)) selectedEdge = null;
+    $('fe-panel').innerHTML = selected ? stepPanel(stepById(selected)) : selectedEdge ? edgePanel(selectedEdge) : flowPanel();
     bindPanel();
     renderChecks();
   }
@@ -230,13 +426,15 @@
           <textarea class="fe-textarea" data-flow="body" placeholder="Markdown shown below the diagram">${esc(flow.body)}</textarea></label>
       </section>
       <section class="fe-section">
-        <h2>Shortcuts</h2>
+        <h2>How to</h2>
         <div class="fe-kbd-list">
-          <kbd class="rh-kbd">C</kbd><span>connect the selected step</span>
+          <span class="fe-dot" aria-hidden="true">●</span><span>drag the dot under a step onto another step to connect them (or onto empty space to add a new step)</span>
+          <span>click a line</span><span>edit its label, reverse it, delete it or insert a step in the middle</span>
+          <span>drag the background</span><span>move around; <kbd class="rh-kbd">Ctrl</kbd> + scroll to zoom</span>
           <kbd class="rh-kbd">N</kbd><span>add a page step after the selected one</span>
-          <kbd class="rh-kbd">Del</kbd><span>delete the selected step</span>
-          <kbd class="rh-kbd">Ctrl Z</kbd><span>undo</span>
-          <kbd class="rh-kbd">Ctrl S</kbd><span>save</span>
+          <kbd class="rh-kbd">C</kbd><span>connect the selected step, then click the target</span>
+          <kbd class="rh-kbd">Del</kbd><span>delete the selected step or line</span>
+          <kbd class="rh-kbd">Ctrl Z</kbd><span>undo · <kbd class="rh-kbd">Ctrl S</kbd> save</span>
           <span>2× click</span><span>open the step's page</span>
         </div>
       </section>`;
@@ -300,6 +498,40 @@
       </section>`;
   }
 
+  function edgePanel({ from, to }) {
+    const e = edgeOf(from, to);
+    const a = stepById(from);
+    const b = stepById(to);
+    return `
+      <section class="fe-section">
+        <div class="fe-section-head">
+          <h2>Connection</h2>
+          <button class="fe-btn fe-btn--small" data-action="deselect">← Flow</button>
+        </div>
+        <div class="fe-edge-ends">
+          <button class="fe-edge-end" data-select-step="${esc(from)}"><small>From</small>${esc(stepTitle(a))}</button>
+          <span class="fe-edge-arrow" aria-hidden="true">→</span>
+          <button class="fe-edge-end" data-select-step="${esc(to)}"><small>To</small>${esc(stepTitle(b))}</button>
+        </div>
+        <label class="fe-field"><span>Label</span>
+          <input class="fe-input" data-edge-label value="${esc(e.label)}" placeholder="e.g. approved, yes, on error">
+          <small>Shown on the line. Useful when a step has more than one way out.</small></label>
+      </section>
+      <section class="fe-section">
+        <h2>Insert in the middle</h2>
+        <div class="fe-row">
+          <button class="fe-btn" data-action="insert-page">+ Page step</button>
+          <button class="fe-btn" data-action="insert-text">+ Decision</button>
+        </div>
+      </section>
+      <section class="fe-section">
+        <div class="fe-row">
+          <button class="fe-btn" data-action="reverse">⇄ Reverse</button>
+          <button class="fe-btn fe-btn--danger" data-action="delete-edge" style="margin-left:auto">Delete connection</button>
+        </div>
+      </section>`;
+  }
+
   function renderChecks() {
     const el = $('fe-checks');
     if (!el) return;
@@ -331,6 +563,24 @@
     });
 
     panel.querySelectorAll('[data-select]').forEach((li) => li.addEventListener('click', () => select(li.getAttribute('data-select'))));
+    panel.querySelectorAll('[data-select-step]').forEach((b) => b.addEventListener('click', () => select(b.getAttribute('data-select-step'))));
+
+    if (selectedEdge) {
+      const { from, to } = selectedEdge;
+      const label = panel.querySelector('[data-edge-label]');
+      label.addEventListener('focus', beginEdit);
+      label.addEventListener('blur', endEdit);
+      label.addEventListener('input', () => { const e = edgeOf(from, to); if (e) { e.label = label.value; setDirty(true); renderCanvas(); } });
+      panel.querySelectorAll('[data-action]').forEach((btn) => btn.addEventListener('click', () => {
+        const action = btn.getAttribute('data-action');
+        if (action === 'deselect') select(null);
+        else if (action === 'delete-edge') deleteEdge(from, to);
+        else if (action === 'reverse') reverseEdge(from, to);
+        else if (action === 'insert-page') openPicker('insert');
+        else if (action === 'insert-text') insertBetween(from, to, { id: uniqueId('decision'), page: '', title: 'New decision', note: '', next: [] });
+      }));
+      return;
+    }
 
     const step = selected && stepById(selected);
     if (!step) return;
@@ -452,6 +702,11 @@
 
   function choosePage(slug) {
     closePicker();
+    if (pickerMode === 'insert' && selectedEdge) {
+      const { from, to } = selectedEdge;
+      insertBetween(from, to, { id: uniqueId(slug.split('/').pop()), page: slug, title: '', note: '', next: [] });
+      return;
+    }
     if (pickerMode === 'assign' && selected) {
       const step = stepById(selected);
       mutate(() => { step.page = slug; delete step._kind; });
@@ -573,6 +828,7 @@
     if (typing) { if (e.key === 'Escape') e.target.blur(); return; }
     if (e.key === 'Escape') { connecting ? setConnecting(false) : select(null); }
     else if ((e.key === 'Delete' || e.key === 'Backspace') && selected) { e.preventDefault(); deleteStep(selected); }
+    else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedEdge) { e.preventDefault(); deleteEdge(selectedEdge.from, selectedEdge.to); }
     else if (e.key.toLowerCase() === 'c' && selected && !mod) { e.preventDefault(); setConnecting(!connecting); }
     else if (e.key.toLowerCase() === 'n' && !mod) { e.preventDefault(); openPicker('add'); }
     else if (e.key === 'Enter' && document.activeElement && document.activeElement.hasAttribute('data-step')) select(document.activeElement.getAttribute('data-step'));

@@ -123,6 +123,37 @@
   }
   onReady(() => addCopyButtons(document));
 
+  // Diagramas de fluxo: destaca as conexões do passo (ou da linha) sob o mouse
+  function focusFlow(svg, target) {
+    svg.querySelectorAll('.is-related').forEach((n) => n.classList.remove('is-related'));
+    if (!target) { svg.classList.remove('is-focusing'); return; }
+    svg.classList.add('is-focusing');
+    const mark = (sel) => svg.querySelectorAll(sel).forEach((n) => n.classList.add('is-related'));
+    const q = (v) => (window.CSS && CSS.escape ? CSS.escape(v) : v);
+    const step = target.getAttribute('data-step');
+    if (step) {
+      target.classList.add('is-related');
+      svg.querySelectorAll(`.rh-flow-link[data-from="${q(step)}"], .rh-flow-link[data-to="${q(step)}"]`).forEach((l) => {
+        l.classList.add('is-related');
+        mark(`.rh-flow-pill[data-edge="${q(l.getAttribute('data-edge'))}"]`);
+        mark(`[data-step="${q(l.getAttribute('data-from'))}"], [data-step="${q(l.getAttribute('data-to'))}"]`);
+      });
+    } else {
+      const edge = target.getAttribute('data-edge');
+      mark(`.rh-flow-link[data-edge="${q(edge)}"], .rh-flow-pill[data-edge="${q(edge)}"]`);
+      mark(`[data-step="${q(target.getAttribute('data-from') || edge.split('>')[0])}"], [data-step="${q(target.getAttribute('data-to') || edge.split('>')[1])}"]`);
+    }
+  }
+  document.addEventListener('mouseover', (e) => {
+    const svg = e.target.closest && e.target.closest('.rh-flow-svg');
+    if (!svg) return;
+    focusFlow(svg, e.target.closest('[data-step], .rh-flow-link, .rh-flow-pill'));
+  });
+  document.addEventListener('mouseout', (e) => {
+    const svg = e.target.closest && e.target.closest('.rh-flow-svg');
+    if (svg && !svg.contains(e.relatedTarget)) focusFlow(svg, null);
+  });
+
   // Diagramas de fluxo mais largos que a tela abrem centralizados
   function centerFlows(root) {
     (root || document).querySelectorAll('.rh-flow').forEach((el) => {

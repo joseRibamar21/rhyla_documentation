@@ -21,7 +21,9 @@ Pages connected into processes (user journeys, API call sequences, troubleshooti
 - [x] Previous/next navigation and mini-map on every page that belongs to a flow
 - [x] Flow steps in the `.md` output and `get_flow` MCP tool
 - [ ] Overview map: every page and every flow connection in one navigable tree/graph
-- [ ] Better layout for large flows (crossing reduction, zoom and pan, collapsible branches)
+- [x] Layered layout with crossing reduction: long edges get their own path, separate ports per connection, curved lines and label pills
+- [x] Hover a step or a line to highlight its connections
+- [ ] Collapsible branches for very large flows
 
 ### Flow editor
 
@@ -33,7 +35,9 @@ A visual editor in `rhyla dev` to build flows without writing YAML. It saves the
 - [x] Decision/text steps, loops, start step, page text
 - [x] Live validation (missing pages, unknown ids), undo/redo, keyboard shortcuts
 - [x] "Edit flow" button on flow pages while running `rhyla dev`
-- [ ] Drag to connect and to reorder steps directly on the canvas
+- [x] Drag the dot under a step onto another step to connect (or onto empty space to add a connected step)
+- [x] Select a line to edit its label, reverse it, delete it or insert a step in the middle
+- [x] Pan by dragging the background, Ctrl + scroll to zoom
 - [ ] Manual positioning for large flows (today the layout is automatic)
 
 ### Page editor (Notion-like)

@@ -617,8 +617,19 @@ pre:hover .rh-copy-btn, .rh-copy-btn:focus-visible { opacity: 1; }
 .rhyla-main .rh-flow-edit:hover { border-color: var(--rh-accent); color: var(--rh-accent); }
 .rh-flow-svg { display: inline-block; max-width: none; height: auto; overflow: visible; }
 
-.rh-flow-edge { fill: none; stroke: var(--rh-muted); stroke-width: 1.5; }
+.rh-flow-edge { fill: none; stroke: color-mix(in srgb, var(--rh-muted) 80%, transparent); stroke-width: 1.5; transition: stroke var(--rh-transition), opacity var(--rh-transition); }
 .rh-flow-edge--back { stroke-dasharray: 5 4; }
+.rh-flow-hit { fill: none; stroke: transparent; stroke-width: 14; }
+.rh-flow-link, .rh-flow-pill, .rh-flow-node { transition: opacity var(--rh-transition); }
+.rh-flow-pill rect { fill: var(--rh-bg); stroke: var(--rh-border); stroke-width: 1; }
+.rh-flow-pill text { font: 600 11px var(--rh-font-family); fill: var(--rh-text-soft); text-anchor: middle; dominant-baseline: central; }
+/* Destaque: ao passar o mouse num passo (ou numa linha), o resto fica em segundo plano */
+.rh-flow-svg.is-focusing .rh-flow-link:not(.is-related),
+.rh-flow-svg.is-focusing .rh-flow-pill:not(.is-related) { opacity: 0.18; }
+.rh-flow-svg.is-focusing .rh-flow-node:not(.is-related) { opacity: 0.45; }
+.rh-flow-link.is-related .rh-flow-edge { stroke: var(--rh-accent); stroke-width: 2; }
+.rh-flow-pill.is-related rect { stroke: var(--rh-accent); }
+.rh-flow-pill.is-related text { fill: var(--rh-accent); }
 .rh-flow-label { font: 500 11.5px var(--rh-font-family); fill: var(--rh-muted); paint-order: stroke; stroke: var(--rh-bg-soft); stroke-width: 4px; stroke-linejoin: round; }
 
 .rh-flow-node rect {
@@ -635,7 +646,7 @@ a.rh-flow-node:focus-visible { outline: none; }
 a.rh-flow-node:focus-visible rect { stroke: var(--rh-accent); stroke-width: 2.5; }
 .rh-flow-node.is-current rect { stroke: var(--rh-accent); stroke-width: 2; fill: var(--rh-accent-soft); }
 .rh-flow-node.is-current .rh-flow-title { fill: var(--rh-accent); }
-.rh-flow-node.is-text rect { stroke-dasharray: 4 3; fill: transparent; }
+.rh-flow-node.is-text rect { stroke-dasharray: 5 4; stroke: color-mix(in srgb, var(--rh-muted) 70%, transparent); stroke-width: 1.4; fill: var(--rh-bg-soft); }
 .rh-flow-node.is-missing rect { stroke: var(--rh-tag-delete); stroke-dasharray: 4 3; }
 .rh-flow-node.is-missing .rh-flow-sub { fill: var(--rh-tag-delete); }
 
