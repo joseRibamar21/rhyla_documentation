@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import matter from 'gray-matter';
 import markdownIt from 'markdown-it';
+import { normalizeApi, withApiReference } from './api.js';
 
 /**
  * Instancia o markdown-it. HTML cru em .md só é permitido com allow_raw_html.
@@ -102,13 +103,14 @@ export function titleFromFileName(name) {
 /**
  * Lê e renderiza uma página (.md ou .html) de forma idêntica no dev e no build.
  *
- * Frontmatter suportado: title, description, order.
+ * Frontmatter suportado: title, description, order e api (páginas de rota: a referência do
+ * endpoint é gerada a partir do bloco, com as opções de `api`, veja apiRenderOptions).
  *
  * @param {string} file caminho absoluto
- * @param {{ md: import('markdown-it'), allowRawHtml?: boolean }} options
+ * @param {{ md: import('markdown-it'), allowRawHtml?: boolean, api?: { lang?: string, examples?: string[], baseUrl?: string|null } }} options
  * @returns {{ data: object, title: string, description: string, html: string, markdown: string|null }}
  */
-export function renderFile(file, { md, allowRawHtml = false }) {
+export function renderFile(file, { md, allowRawHtml = false, api: apiOptions = {} }) {
   const ext = path.extname(file).toLowerCase();
   const source = fs.readFileSync(file, 'utf8');
   const parsed = matter(source);
@@ -120,7 +122,11 @@ export function renderFile(file, { md, allowRawHtml = false }) {
     const h1 = firstMarkdownH1(body);
     const title = String(data.title || h1 || fallbackTitle);
     // Se o título veio só do frontmatter, renderiza um H1 para a página não ficar sem cabeçalho
-    const markdown = !h1 && data.title ? `# ${data.title}\n\n${body.replace(/^\s+/, '')}` : body;
+    let markdown = !h1 && data.title ? `# ${data.title}\n\n${body.replace(/^\s+/, '')}` : body;
+    if (data.api !== undefined) {
+      const { api } = normalizeApi(data.api);
+      if (api) markdown = withApiReference(markdown, api, apiOptions);
+    }
     return {
       data,
       title,

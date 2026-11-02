@@ -70,15 +70,15 @@ export function listPages(bodyPath, { isIgnored = () => false } = {}) {
 /**
  * Renderiza uma página da lista (título, descrição, html e markdown limpo).
  */
-export function loadPage(page, { md, allowRawHtml }) {
-  return { ...page, ...renderFile(page.file, { md, allowRawHtml }) };
+export function loadPage(page, { md, allowRawHtml, api }) {
+  return { ...page, ...renderFile(page.file, { md, allowRawHtml, api }) };
 }
 
 /**
  * Atalho: lista e renderiza todas as páginas.
  */
-export function collectPages(bodyPath, { md, allowRawHtml, isIgnored }) {
-  return listPages(bodyPath, { isIgnored }).map((p) => loadPage(p, { md, allowRawHtml }));
+export function collectPages(bodyPath, { md, allowRawHtml, isIgnored, api }) {
+  return listPages(bodyPath, { isIgnored }).map((p) => loadPage(p, { md, allowRawHtml, api }));
 }
 
 /**

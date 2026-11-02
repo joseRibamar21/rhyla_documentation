@@ -34,10 +34,35 @@ export function loadConfig(rhylaPath) {
     raw,
     file,
     title: typeof raw.title === 'string' ? raw.title : '',
+    // Logo do site (ex.: "/public/logo.png"); sem ela, o header mostra a marca padrão
+    logo: typeof raw.logo === 'string' && raw.logo.trim() ? raw.logo.trim() : null,
     description: typeof raw.description === 'string' ? raw.description : '',
     siteUrl: typeof raw.site_url === 'string' && raw.site_url.trim() ? raw.site_url.trim() : null,
     base: normalizeBase(raw.base),
     allowRawHtml: raw.allow_raw_html === true,
     buildIgnore: Array.isArray(raw.build_ignore) ? raw.build_ignore.filter((s) => typeof s === 'string') : [],
   };
+}
+
+/**
+ * Altera campos do rhyla-docs/config.json, preservando os demais. `undefined` não mexe; `null` remove.
+ * @throws {Error} se o arquivo existir e não for JSON válido
+ */
+export function updateConfig(rhylaPath, patch) {
+  const file = path.join(rhylaPath, 'config.json');
+  let raw = {};
+  if (fs.existsSync(file)) {
+    try {
+      raw = JSON.parse(fs.readFileSync(file, 'utf8')) || {};
+    } catch {
+      throw new Error(`${DOCS_DIR}/config.json is not valid JSON. Fix it, then try again.`);
+    }
+  }
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    if (value === null) delete raw[key];
+    else raw[key] = value;
+  }
+  fs.writeFileSync(file, JSON.stringify(raw, null, 2) + '\n', 'utf8');
+  return raw;
 }

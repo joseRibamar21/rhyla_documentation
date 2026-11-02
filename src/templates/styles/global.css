@@ -176,7 +176,8 @@ a:hover { color: var(--rh-accent-strong); }
   letter-spacing: -0.01em;
 }
 .rhyla-brand:hover { color: var(--rh-text); }
-.rhyla-brand img { display: block; max-height: 36px; width: auto; }
+/* Altura definida: com só max-height, o flex calcula errado a largura e espreme o título */
+.rhyla-brand img { display: block; flex: none; height: 32px; width: auto; max-width: 180px; object-fit: contain; }
 .rhyla-brand h1 { margin: 0; font-size: 16px; }
 .rh-brand-mark {
   display: grid;

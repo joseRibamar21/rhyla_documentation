@@ -5,9 +5,9 @@ import { escapeHtml } from './content.js';
  * link alternativo para a versão markdown (útil para agentes de IA).
  *
  * @param {string} header conteúdo de header.html
- * @param {{ pageTitle?: string, siteTitle?: string, description?: string, markdownHref?: string }} meta
+ * @param {{ pageTitle?: string, siteTitle?: string, logo?: string|null, description?: string, markdownHref?: string }} meta
  */
-export function applyPageMeta(header, { pageTitle, siteTitle, description, markdownHref } = {}) {
+export function applyPageMeta(header, { pageTitle, siteTitle, logo, description, markdownHref } = {}) {
   let out = header;
   const extras = [];
 
@@ -24,6 +24,11 @@ export function applyPageMeta(header, { pageTitle, siteTitle, description, markd
   // Nome do site no header, já no HTML (sem esperar o runtime ler o config.json)
   if (siteTitle) {
     out = out.replace(/(<[a-z0-9]+[^>]*\bid=["']rhyla-title["'][^>]*>)[\s\S]*?(<\/)/i, (_, open, close) => open + escapeHtml(siteTitle) + close);
+  }
+
+  // Logo do config.json no lugar da marca padrão (headers personalizados sem a marca ficam como estão)
+  if (logo) {
+    out = out.replace(/<span\s+class=["']rh-brand-mark["'][^>]*>[\s\S]*?<\/span>/i, `<img class="rh-brand-logo" src="${escapeHtml(logo)}" alt="">`);
   }
 
   if (description) {

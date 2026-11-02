@@ -7,9 +7,13 @@ import { DOCS_DIR, loadConfig } from "../core/config.js";
 import { createMarkdown, renderFile } from "../core/content.js";
 import { collectPages, resolvePageFile } from "../core/pages.js";
 import { buildSearchIndex, buildLlmsTxt, buildLlmsFullTxt } from "../core/artifacts.js";
+import { apiRenderOptions } from "../core/api.js";
+import { buildOpenApi, openApiInfo } from "../core/openapi.js";
 import { applyPageMeta, assemblePage } from "../core/layout.js";
 import { buildFlowGraph, decoratePage } from "../core/flows.js";
 import { registerEditorRoutes, EDITOR_BASE } from "./dev-editor.js";
+import { registerSetupRoutes } from "./dev-setup.js";
+import { createSetup } from "../core/setup.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -82,11 +86,14 @@ function prepareHeader(rhylaPath) {
  * Servidor de desenvolvimento. Renderiza com o mesmo pipeline do build
  * (frontmatter, allow_raw_html, sanitização), sempre a partir dos arquivos atuais.
  *
- * @param {{ port?: string|number, host?: string, cwd?: string, quiet?: boolean }} opts
+ * `setup` é o estado do wizard de configuração; o MCP passa o dele para acompanhar a geração.
+ *
+ * @param {{ port?: string|number, host?: string, cwd?: string, quiet?: boolean, setup?: ReturnType<typeof createSetup> }} opts
  * @returns {import('http').Server}
  */
 export default function dev(opts = {}) {
-  const rhylaPath = path.join(opts.cwd || process.cwd(), DOCS_DIR);
+  const root = opts.cwd || process.cwd();
+  const rhylaPath = path.join(root, DOCS_DIR);
   const bodyPath = path.join(rhylaPath, "body");
   const scriptsFolderPath = path.join(__dirname, "../templates/scripts");
   const notFoundPath = path.join(bodyPath, "notFound.html");
@@ -100,9 +107,10 @@ export default function dev(opts = {}) {
   const context = () => {
     const config = loadConfig(rhylaPath);
     const md = createMarkdown({ allowRawHtml: config.allowRawHtml });
-    return { config, md, allowRawHtml: config.allowRawHtml };
+    return { config, md, allowRawHtml: config.allowRawHtml, api: apiRenderOptions(config.raw) };
   };
   const allPages = (ctx) => collectPages(bodyPath, ctx);
+  const openApi = (ctx, pages = allPages(ctx)) => buildOpenApi(pages, openApiInfo(ctx.config, root));
 
   // Fluxos: o grafo é recalculado a cada requisição (reflete edições na hora)
   const flowLinks = {
@@ -136,11 +144,19 @@ export default function dev(opts = {}) {
     res.status(404).json({});
   });
 
+  // openapi.json gerado dos blocos `api:` das páginas de rota (mesmo conteúdo do build)
+  app.get("/openapi.json", (req, res) => {
+    const { spec, operations } = openApi(context());
+    if (!operations) return res.status(404).json({ error: "No page has an api block" });
+    res.json(spec);
+  });
+
   // llms.txt / llms-full.txt (mesmo conteúdo do build)
   app.get(["/llms.txt", "/llms-full.txt"], (req, res) => {
     const ctx = context();
-    const options = { title: ctx.config.title, description: ctx.config.description, urlFor: (rel) => "/" + rel };
-    const pages = withFlows(allPages(ctx));
+    const source = allPages(ctx);
+    const options = { title: ctx.config.title, description: ctx.config.description, urlFor: (rel) => "/" + rel, openapi: openApi(ctx, source).operations > 0 };
+    const pages = withFlows(source);
     res.type("text/plain; charset=utf-8");
     res.send(req.path === "/llms.txt" ? buildLlmsTxt(pages, options) : buildLlmsFullTxt(pages, options));
   });
@@ -156,6 +172,9 @@ export default function dev(opts = {}) {
 
   // Editor de fluxos (interface + API)
   registerEditorRoutes(app, { bodyPath, publicPath: path.join(rhylaPath, "public"), context, allPages, log });
+
+  // Wizard de configuração da documentação gerada por agentes
+  registerSetupRoutes(app, { setup: opts.setup || createSetup({ cwd: root }), publicPath: path.join(rhylaPath, "public"), log });
 
   // Endpoint usado pelo kit_dev_rhyla para gerar arquivos markdown
   app.post("/generate-page", (req, res) => {
@@ -187,7 +206,7 @@ export default function dev(opts = {}) {
 
   function sendNotFound(res, ctx) {
     const notFound = fs.existsSync(notFoundPath) ? renderFile(notFoundPath, ctx).html : "<h1>404</h1>";
-    const header = applyPageMeta(prepareHeader(rhylaPath), { pageTitle: "Not found", siteTitle: ctx.config.title });
+    const header = applyPageMeta(prepareHeader(rhylaPath), { pageTitle: "Not found", siteTitle: ctx.config.title, logo: ctx.config.logo });
     const sidebar = generateSidebarHTML(bodyPath, null, null);
     res.status(404).send(assemblePage(header, sidebar, notFound));
   }
@@ -205,6 +224,7 @@ export default function dev(opts = {}) {
     const header = applyPageMeta(prepareHeader(rhylaPath), {
       pageTitle: isHome ? "" : page.title,
       siteTitle: ctx.config.title,
+      logo: ctx.config.logo,
       description: page.description || (isHome ? ctx.config.description : ""),
       markdownHref: page.markdown !== null ? `/${isHome ? "index" : resolved.slug}.md` : null,
     });

@@ -22,14 +22,16 @@ const prettyGroup = (group) => group.split('/').map((s) => s.replace(/[_-]+/g, '
 /**
  * Gera o llms.txt (https://llmstxt.org): índice em markdown com links para cada página.
  * @param {Array} pages páginas renderizadas
- * @param {{ title: string, description: string, urlFor: (relPath: string) => string }} options
+ * @param {{ title: string, description: string, urlFor: (relPath: string) => string, openapi?: boolean }} options
+ *   openapi: o site publica openapi.json (há páginas com bloco `api:`)
  */
-export function buildLlmsTxt(pages, { title, description, urlFor }) {
+export function buildLlmsTxt(pages, { title, description, urlFor, openapi = false }) {
   const lines = [`# ${title || 'Documentation'}`, ''];
   if (description) lines.push(`> ${description}`, '');
   lines.push(
     'Every page is also available as plain Markdown (same URL with a `.md` extension).',
     `The full documentation in a single file is at ${urlFor('llms-full.txt')}.`,
+    ...(openapi ? [`The API is also described as OpenAPI at ${urlFor('openapi.json')}.`] : []),
     ''
   );
 

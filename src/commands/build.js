@@ -7,6 +7,8 @@ import { createIgnoreMatcher } from '../core/ignore.js';
 import { createMarkdown, sanitizeHtml } from '../core/content.js';
 import { collectPages } from '../core/pages.js';
 import { buildSearchIndex, buildLlmsTxt, buildLlmsFullTxt } from '../core/artifacts.js';
+import { apiRenderOptions } from '../core/api.js';
+import { buildOpenApi, openApiInfo } from '../core/openapi.js';
 import { applyPageMeta, assemblePage } from '../core/layout.js';
 import { buildFlowGraph, decoratePage } from '../core/flows.js';
 
@@ -276,7 +278,7 @@ export default function build(opts = {}) {
     fs.writeFileSync(out, content, 'utf8');
   };
 
-  const sourcePages = collectPages(bodyPath, { md, allowRawHtml, isIgnored });
+  const sourcePages = collectPages(bodyPath, { md, allowRawHtml, isIgnored, api: apiRenderOptions(config.raw) });
 
   // Fluxos: diagrama nas páginas de fluxo e navegação nas páginas que participam deles
   const flowGraph = buildFlowGraph(sourcePages);
@@ -292,6 +294,7 @@ export default function build(opts = {}) {
     const pageHeader = applyPageMeta(headerInline, {
       pageTitle: page.isHome ? '' : page.title,
       siteTitle: config.title,
+      logo: config.logo,
       description: page.description || (page.isHome ? config.description : ''),
       markdownHref: markdownRel ? '/' + markdownRel : null,
     });
@@ -324,7 +327,7 @@ export default function build(opts = {}) {
   if (!pages.some((p) => p.isHome)) {
     const sidebar = generateSidebarHTML(bodyPath, null, null, { ignore: ignorePatterns });
     writeFile('index.html', injectCanonical(
-      rewriteForBase(assemblePage(applyPageMeta(headerInline, { siteTitle: config.title }), sidebar, notFoundHTML), basePath),
+      rewriteForBase(assemblePage(applyPageMeta(headerInline, { siteTitle: config.title, logo: config.logo }), sidebar, notFoundHTML), basePath),
       absoluteBaseUrl
     ));
     sitemapPaths.push('index.html');
@@ -333,7 +336,7 @@ export default function build(opts = {}) {
   // 404 com sidebar
   const sidebar404 = generateSidebarHTML(bodyPath, null, null, { ignore: ignorePatterns });
   writeFile('404.html', rewriteForBase(
-    assemblePage(applyPageMeta(headerInline, { pageTitle: 'Not found', siteTitle: config.title }), sidebar404, notFoundHTML),
+    assemblePage(applyPageMeta(headerInline, { pageTitle: 'Not found', siteTitle: config.title, logo: config.logo }), sidebar404, notFoundHTML),
     basePath
   ));
 
@@ -343,8 +346,16 @@ export default function build(opts = {}) {
   writeFile('scripts/search_index.json', JSON.stringify(searchIndex));
   writeFile('scripts/search_index.js', `window.__SEARCH_INDEX__ = ${JSON.stringify(searchIndex)};`);
 
+  // openapi.json a partir dos blocos `api:` das páginas de rota
+  const openapi = buildOpenApi(sourcePages, {
+    ...openApiInfo(config, root),
+    pageUrl: (page) => (absoluteBaseUrl ? absoluteBaseUrl + (page.isHome ? '' : `${page.slug}.html`) : null),
+  });
+  openapi.warnings.forEach((w) => console.warn(`⚠️  ${w}`));
+  if (openapi.operations) writeFile('openapi.json', JSON.stringify(openapi.spec, null, 2) + '\n');
+
   // llms.txt + llms-full.txt (https://llmstxt.org)
-  const llmsOptions = { title: config.title, description: config.description, urlFor };
+  const llmsOptions = { title: config.title, description: config.description, urlFor, openapi: openapi.operations > 0 };
   writeFile('llms.txt', buildLlmsTxt(pages, llmsOptions));
   writeFile('llms-full.txt', buildLlmsFullTxt(pages, llmsOptions));
 
@@ -360,6 +371,6 @@ export default function build(opts = {}) {
     log(`ℹ️  site_url missing in ${DOCS_DIR}/config.json. Set "site_url" to generate sitemap.xml, robots.txt and absolute URLs.`);
   }
 
-  log(`✅ Build completed: ${pages.length} pages${flowGraph.flows.length ? `, ${flowGraph.flows.length} flows` : ''} → dist/ (search index, llms.txt, llms-full.txt, .md sources)`);
-  return { distPath, pages: pages.length };
+  log(`✅ Build completed: ${pages.length} pages${flowGraph.flows.length ? `, ${flowGraph.flows.length} flows` : ''} → dist/ (search index, llms.txt, llms-full.txt, .md sources${openapi.operations ? `, openapi.json with ${openapi.operations} operations` : ''})`);
+  return { distPath, pages: pages.length, operations: openapi.operations };
 }
