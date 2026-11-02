@@ -84,10 +84,21 @@ A standard `api` block in the frontmatter of each route page: the contract of th
 - [x] `rhyla check` for CI (and `check_docs` for the agent): routes in the code without a page, pages of routes that no longer exist, invalid blocks; warnings for pages without a block, duplicates, broken flows and broken links; GitHub Actions annotations
 - [ ] Method badge in the sidebar from the block when the file name has none
 
+### Try it
+
+Run the routes from their pages: a panel in the bottom-right corner of every route page.
+
+- [x] "Try it" button on route pages in `rhyla dev` (`api` block, `# METHOD /path` heading or method in the file name), following the SPA navigation
+- [x] Fields filled from the block: server, path, query and header parameters, body example, authentication; requests stay saved per page in the tab
+- [x] Status, time, size, headers and body of the response; copy as curl; Ctrl + Enter sends
+- [x] Requests go through a `rhyla dev` proxy (no CORS), only to the machine itself or to `api.base_url` / `api.environments`; confirmation before a write method to a host that is not localhost
+- [x] Login route marked in the block (`login: { token: … }`, flagged by `find_routes`): its token is saved for the session and sent to `auth: bearer` routes, with its expiry and a log out button; a token in other responses is offered; cookie sessions kept by the proxy
+- [x] Optional in the published site (`api.try_it: true`, calling the API directly)
+- [ ] MCP tool for the agent to call the API and capture real responses (off by default)
+
 ## 💡 Later
 
 - Core rewrite (2.0): single layout template, one base-path strategy, fewer moving parts in the browser runtime
-- Run requests from the docs: a "Try it" panel built on the `api` block, the login route detected and its token kept for the session
 - Syntax highlighting for code blocks
 - Versioned docs (v1, v2) and i18n
 - Publishing through npm Trusted Publishing (no long-lived tokens)

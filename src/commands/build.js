@@ -9,6 +9,7 @@ import { collectPages } from '../core/pages.js';
 import { buildSearchIndex, buildLlmsTxt, buildLlmsFullTxt } from '../core/artifacts.js';
 import { apiRenderOptions } from '../core/api.js';
 import { buildOpenApi, openApiInfo } from '../core/openapi.js';
+import { routeEndpoint, tryData, tryPanelHtml, trySettings } from '../core/try.js';
 import { applyPageMeta, assemblePage } from '../core/layout.js';
 import { buildFlowGraph, decoratePage } from '../core/flows.js';
 
@@ -286,6 +287,13 @@ export default function build(opts = {}) {
   const hrefFor = (slug) => (slug === 'home' ? '/' : `/${slug}.html`);
   const mdHrefFor = (slug) => urlFor(slug === 'home' ? 'index.md' : `${slug}.md`);
   const pages = sourcePages.map((p) => ({ ...p, ...decoratePage(p, flowGraph, { hrefFor, mdHrefFor }) }));
+  // Painel "Testar" no site publicado só com api.try_it: true (sem o proxy do dev, a API precisa de CORS)
+  const tryIt = trySettings(config.raw);
+  const tryPanel = (page) => {
+    const endpoint = tryIt.build && routeEndpoint(page);
+    const language = config.raw.preferences && config.raw.preferences.language;
+    return endpoint ? tryPanelHtml(tryData(endpoint, { page: page.slug, language, servers: tryIt.servers, mode: 'direct' })) : '';
+  };
   // Caminhos relativos com .html, para o sitemap
   const sitemapPaths = [];
 
@@ -301,7 +309,7 @@ export default function build(opts = {}) {
     const sidebar = page.isHome
       ? generateSidebarHTML(bodyPath, null, 'home', { ignore: ignorePatterns })
       : generateSidebarHTML(bodyPath, page.group || null, page.name, { ignore: ignorePatterns });
-    const html = rewriteForBase(assemblePage(pageHeader, sidebar, page.html), basePath);
+    const html = rewriteForBase(assemblePage(pageHeader, sidebar, page.html + tryPanel(page)), basePath);
 
     if (page.isHome) {
       const homeHtml = injectCanonical(html, absoluteBaseUrl);

@@ -135,8 +135,9 @@ Creates the account and sends the welcome email unless `notify` is false.
 - A field is a type name (`string`, `integer`, `number`, `boolean`, `object`, `array`, `string[]`, `date`, `date-time`, `email`, `uuid`, `uri`, `binary`) or an object with `type`, `description`, `required`, `default`, `example`, `enum`, `format`, `minimum`/`maximum`, `minLength`/`maxLength`, `pattern`, nested `fields`, or `items` for arrays. `params`, `query`, `headers` and `cookies` use the same format.
 - For shapes fields cannot express (oneOf, additionalProperties…), use `schema:` with a JSON Schema instead of `fields:`.
 - Optional: `deprecated: true`, `tags: [Users]` (default: the folder), `operation_id`, `summary`, `description`.
+- Login route: `login: { token: data.access_token }`, the path of the token in the success response (`login: true` when Rhyla should find it). Mark it only when the code shows the route returns the token the other routes expect; `find_routes` flags candidates with `login: true`. The "Try it" panel keeps that token for the session and sends it to the routes with `auth: bearer`.
 - Document only what the code shows: leave out a field, a status or an example instead of guessing it.
-- `config.json` → `api.base_url` is used in the request examples and as the server in `openapi.json`.
+- `config.json` → `api.base_url` is used in the request examples, as the server in `openapi.json` and in the "Try it" panel; `api.environments` (`{ "Staging": "https://…" }`) adds servers to the panel.
 
 If the project already has an OpenAPI or Swagger spec, `rhyla openapi import <file|url>` (or the `import_openapi` MCP tool) writes these pages from it; importing again only replaces the `api` blocks and keeps the text. `rhyla openapi export` writes `openapi.json` from the pages.
 

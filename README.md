@@ -136,6 +136,14 @@ The full format is in `rhyla-docs/AGENTS.md`. The generated headings follow the 
 
 In `rhyla dev`, the **API Page Generator** at `/kit_dev_rhyla/new_rote` builds these pages from a form (it is never included in the build).
 
+#### Trying the routes
+
+Every route page (an `api` block, a `# METHOD /path` heading or a method in the file name) gets a **Try it** button in the bottom-right corner while `rhyla dev` runs. The panel comes filled from the block: server, path, query and header parameters, body example and authentication. It shows the status, time, headers and body of the response, and copies the request as curl.
+
+- **Servers**: `api.base_url` and `api.environments` in `config.json`, or any address on your machine. Requests go through `rhyla dev`, so the API needs no CORS; sending a write method to a host that is not `localhost` asks first.
+- **Login**: mark the login route with `login: { token: token }` in its `api` block (the path of the token in the response). Calling it from the panel saves the token, and the routes with `auth: bearer` send it, with its expiry next to the field. On other routes, a token in a response is offered too, and you can paste one. The token lives only in the tab's `sessionStorage`, never on disk or in the build. Cookie sessions are kept by `rhyla dev` while it runs.
+- **Published site**: the panel is off in `rhyla build`. With `"api": { "try_it": true }` it is included and calls the API straight from the browser, so the API must allow CORS from the docs site. `"try_it": false` turns it off in `rhyla dev` too.
+
 ### Checking the docs in CI
 
 `rhyla check` compares the route pages with the HTTP routes Rhyla finds in the code (the same scanner as `find_routes`), without AI, in seconds:
@@ -186,7 +194,9 @@ In GitHub Actions, the problems also show up as annotations on the pull request:
 | `side_topics` | "On this page" table of contents |
 | `allow_raw_html` | Allow raw HTML in `.md` and scripts in `.html` pages |
 | `build_ignore` | Names, paths or `*` patterns (relative to `body/`) left out of the build |
-| `api.base_url` | API server used in the request examples and in `openapi.json` |
+| `api.base_url` | API server used in the request examples, in `openapi.json` and in the Try it panel |
+| `api.environments` | More servers for the Try it panel: `{ "Staging": "https://staging.example.com" }` |
+| `api.try_it` | `true` includes the Try it panel in `rhyla build` (the API needs CORS); `false` turns it off in `rhyla dev` too |
 | `api.version` | Version in `openapi.json` (default: the project's `package.json` version) |
 | `check.ignore` | Routes `rhyla check` leaves out: `"GET /health"`, `"/internal/*"`, `"* /admin/*"` |
 

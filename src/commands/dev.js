@@ -13,6 +13,8 @@ import { applyPageMeta, assemblePage } from "../core/layout.js";
 import { buildFlowGraph, decoratePage } from "../core/flows.js";
 import { registerEditorRoutes, EDITOR_BASE } from "./dev-editor.js";
 import { registerSetupRoutes } from "./dev-setup.js";
+import { registerTryRoutes } from "./dev-try.js";
+import { routeEndpoint, tryData, tryPanelHtml, trySettings } from "../core/try.js";
 import { createSetup } from "../core/setup.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -176,6 +178,9 @@ export default function dev(opts = {}) {
   // Wizard de configuração da documentação gerada por agentes
   registerSetupRoutes(app, { setup: opts.setup || createSetup({ cwd: root }), publicPath: path.join(rhylaPath, "public"), log });
 
+  // Proxy do painel "Testar" das páginas de rota
+  registerTryRoutes(app, { context, log });
+
   // Endpoint usado pelo kit_dev_rhyla para gerar arquivos markdown
   app.post("/generate-page", (req, res) => {
     const { filePath, content } = req.body || {};
@@ -235,6 +240,13 @@ export default function dev(opts = {}) {
     // Atalho para o editor de páginas (só no dev, só para .md)
     if (page.markdown !== null) {
       content = `<div class="rh-page-tools"><a class="rh-page-edit" href="${EDITOR_BASE}/page-editor?page=${encodeURIComponent(resolved.slug)}" data-no-spa>Edit page</a></div>${content}`;
+    }
+    // Painel "Testar" nas páginas de rota (bloco api, H1 "MÉTODO /caminho" ou método no nome do arquivo)
+    const endpoint = isDevKit ? null : routeEndpoint({ ...page, name: resolved.topic });
+    const tryIt = trySettings(ctx.config.raw);
+    if (endpoint && tryIt.dev) {
+      const prefs = ctx.config.raw.preferences || {};
+      content += tryPanelHtml(tryData(endpoint, { page: resolved.slug, language: prefs.language, servers: tryIt.servers, proxy: `${EDITOR_BASE}/try` }));
     }
     res.send(assemblePage(header, sidebar, content));
   });
