@@ -1,11 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import { DOCS_DIR, loadConfig, updateConfig } from '../core/config.js';
+import { DOCS_DIR, loadConfig } from '../core/config.js';
 import { createIgnoreMatcher } from '../core/ignore.js';
 import { createMarkdown } from '../core/content.js';
 import { collectPages } from '../core/pages.js';
-import { applyImport, buildOpenApi, importOpenApi, openApiInfo, readSpec } from '../core/openapi.js';
-import { TEMPLATES_DIR } from './init.js';
+import { buildOpenApi, openApiInfo } from '../core/openapi.js';
+import { formatName, importIntoProject, readSource } from '../core/import.js';
+import init, { blankHome } from './init.js';
 
 // Igual ao build: o kit de desenvolvimento não é documentação
 const DEFAULT_IGNORE = ['kit_dev_rhyla'];
@@ -31,43 +32,25 @@ export function exportSpec({ cwd = process.cwd() } = {}) {
 }
 
 /**
- * Importa uma especificação OpenAPI 3 / Swagger 2 para rhyla-docs/body (CLI e MCP).
- * No config.json, o servidor da especificação vira api.base_url (se ainda não houver um) e
- * o título e a descrição do site vêm do `info` enquanto forem os do template.
+ * Importa uma especificação OpenAPI 3, Swagger 2 ou uma coleção do Postman para rhyla-docs/body
+ * (CLI, MCP e wizard). O formato é detectado pelo conteúdo; veja src/core/import.js.
  * @param {{ cwd?: string, source: string, update?: boolean, dryRun?: boolean }} opts
  */
 export async function importSpec({ cwd = process.cwd(), source, update = true, dryRun = false }) {
-  const { rhylaPath, bodyPath } = project(cwd);
-  const imported = importOpenApi(await readSpec(source, { cwd }), { source });
-  const result = applyImport(bodyPath, imported, { update, dryRun });
-
-  const config = loadConfig(rhylaPath);
-  const template = JSON.parse(fs.readFileSync(path.join(TEMPLATES_DIR, 'config.json'), 'utf8'));
-  const unset = (key) => !config[key] || config[key] === template[key];
-  const api = config.raw.api && typeof config.raw.api === 'object' && !Array.isArray(config.raw.api) ? config.raw.api : {};
-  const patch = {};
-  if (imported.info.baseUrl && !api.base_url) patch.api = { ...api, base_url: imported.info.baseUrl };
-  if (imported.info.title && unset('title')) patch.title = imported.info.title;
-  if (imported.info.summary && unset('description')) patch.description = imported.info.summary;
-  if (!dryRun && Object.keys(patch).length) updateConfig(rhylaPath, patch);
-  return {
-    operations: imported.pages.length,
-    ...result,
-    ...(patch.api ? { base_url: patch.api.base_url } : {}),
-    ...(patch.title ? { site_title: patch.title } : {}),
-    warnings: imported.warnings,
-  };
+  project(cwd);
+  const doc = await readSource(source, { cwd });
+  return importIntoProject({ cwd, doc, source, update, dryRun });
 }
 
 const listed = (routes) => routes.slice(0, MAX_LISTED).join(', ') + (routes.length > MAX_LISTED ? `, +${routes.length - MAX_LISTED}` : '');
 
-/** `rhyla openapi import <source>` */
+/** `rhyla import <source>` (e o nome antigo, `rhyla openapi import <source>`) */
 export async function openapiImport(source, opts = {}) {
   const log = opts.quiet ? () => {} : console.log;
   const dryRun = Boolean(opts.dryRun);
   const result = await importSpec({ cwd: opts.cwd, source, update: opts.update !== false, dryRun });
   result.warnings.forEach((w) => console.warn(`⚠️  ${w}`));
-  log(`📥 ${result.operations} operations in ${source}${dryRun ? ' (dry run: nothing was written)' : ''}`);
+  log(`📥 ${result.operations} ${result.format === 'postman' ? 'requests' : 'operations'} in ${source} (${formatName(result.format)})${dryRun ? ' (dry run: nothing was written)' : ''}`);
   const lines = [
     ['created', result.created],
     ['api block updated (text kept)', result.updated],
@@ -90,7 +73,7 @@ export function openapiExport(opts = {}) {
   const { spec, operations, warnings, withoutApi } = exportSpec({ cwd });
   warnings.forEach((w) => console.warn(`⚠️  ${w}`));
   if (!operations) {
-    throw new Error(`No page has an api block. Add one to the route pages (see ${DOCS_DIR}/AGENTS.md) or import a spec with "rhyla openapi import".`);
+    throw new Error(`No page has an api block. Add one to the route pages (see ${DOCS_DIR}/AGENTS.md) or import a spec with "rhyla import <openapi.yaml | collection.json>".`);
   }
   const json = JSON.stringify(spec, null, 2) + '\n';
   let file = null;
@@ -102,4 +85,19 @@ export function openapiExport(opts = {}) {
   }
   if (withoutApi.length) log(`ℹ️  ${withoutApi.length} endpoint pages have no api block and were left out: ${listed(withoutApi)}`);
   return { spec, operations, warnings, withoutApi, file };
+}
+
+/**
+ * `rhyla init --import <source>`: estrutura em branco, as páginas de rota da especificação e uma
+ * home com o título e a descrição dela.
+ */
+export async function initWithImport(source, opts = {}) {
+  const cwd = opts.cwd || process.cwd();
+  init({ ...opts, cwd, blank: true });
+  const result = await openapiImport(source, { ...opts, cwd });
+  const home = path.join(cwd, DOCS_DIR, 'body', 'home.md');
+  if (result.title && fs.existsSync(home) && fs.readFileSync(home, 'utf8') === blankHome()) {
+    fs.writeFileSync(home, blankHome(result.title, result.summary), 'utf8');
+  }
+  return result;
 }

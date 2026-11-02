@@ -139,7 +139,7 @@ Creates the account and sends the welcome email unless `notify` is false.
 - Document only what the code shows: leave out a field, a status or an example instead of guessing it.
 - `config.json` → `api.base_url` is used in the request examples, as the server in `openapi.json` and in the "Try it" panel; `api.environments` (`{ "Staging": "https://…" }`) adds servers to the panel.
 
-If the project already has an OpenAPI or Swagger spec, `rhyla openapi import <file|url>` (or the `import_openapi` MCP tool) writes these pages from it; importing again only replaces the `api` blocks and keeps the text. `rhyla openapi export` writes `openapi.json` from the pages.
+If the project already has an OpenAPI / Swagger spec or a Postman collection, `rhyla import <file|url>` (or the `import_openapi` MCP tool) writes these pages from it, without its secrets; importing again only replaces the `api` blocks and keeps the text. `rhyla openapi export` writes `openapi.json` from the pages.
 
 ## Commands
 

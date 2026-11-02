@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { DOCS_DIR, loadConfig, updateConfig } from './config.js';
 import { MODE_KEYS, defaultPreferences, readPreferences, savePreferences } from './preferences.js';
-import { findRoutes, listProjectFiles, projectStats } from './routes.js';
+import { findOpenApi, findRoutes, listProjectFiles, projectStats } from './routes.js';
+import { MAX_SOURCE_BYTES, formatName, importDocument, importIntoProject, parseSource, readSource } from './import.js';
 
 /*
  * Estado do wizard de configuração (/__rhyla/setup no `rhyla dev`).
@@ -68,6 +69,36 @@ export function formatSiteTodo(todo) {
   return lines.join('\n');
 }
 
+// Especificações do projeto (OpenAPI, Swagger, Postman) que o wizard oferece para importar
+const MAX_SOURCES = 6;
+function projectSources(cwd, files) {
+  const found = findOpenApi(cwd, files);
+  return [...found.files, ...found.postman].slice(0, MAX_SOURCES).map((file) => {
+    try {
+      const full = path.join(cwd, file);
+      if (fs.statSync(full).size > MAX_SOURCE_BYTES) return { path: file, error: 'larger than 10 MB' };
+      const imported = importDocument(parseSource(fs.readFileSync(full, 'utf8'), file), { source: file });
+      return { path: file, format: imported.format, formatName: formatName(imported.format), title: imported.info.title || '', operations: imported.pages.length };
+    } catch (err) {
+      return { path: file, error: err.message };
+    }
+  });
+}
+
+/** O que foi importado, para o agente: de onde, quantas páginas e o que falta escrever. */
+export function formatImported(imported) {
+  if (!imported) return null;
+  const routes = [...imported.created, ...imported.updated, ...imported.unchanged];
+  return {
+    source: imported.source,
+    format: formatName(imported.format),
+    pages: routes.length,
+    routes: routes.slice(0, 40),
+    ...(routes.length > 40 ? { more: routes.length - 40 } : {}),
+    ...(imported.warnings.length ? { warnings: imported.warnings } : {}),
+  };
+}
+
 // Caminho de página como o agente informa ("api/tasks/get-list", "/guide/x.md") → slug
 const toSlug = (p) => String(p || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').replace(/\.(md|html)$/i, '') || 'home';
 
@@ -89,6 +120,51 @@ export function createSetup({ cwd, agent = false }) {
   let siteTodo = null;
   // Data de modificação de cada página quando o wizard abriu: só conta como escrita a que mudar depois
   let before = new Map();
+  // Especificação escolhida no primeiro passo: o arquivo enviado e a última lida (para não ler de novo)
+  let uploaded = null;
+  let loaded = null;
+  let imported = null;
+
+  // { kind: 'file', path } | { kind: 'url', url } | { kind: 'upload' } → documento e um rótulo
+  async function loadSource(source) {
+    const kind = source && source.kind;
+    if (kind === 'upload') {
+      if (!uploaded) throw new Error('Send the file again.');
+      return { doc: uploaded.doc, label: uploaded.name };
+    }
+    let label;
+    if (kind === 'file') {
+      const rel = String(source.path || '').replace(/\\/g, '/');
+      const full = path.resolve(cwd, rel);
+      if (!rel || !full.startsWith(path.resolve(cwd) + path.sep)) throw new Error('Choose a file inside the project.');
+      label = path.relative(cwd, full).split(path.sep).join('/');
+    } else if (kind === 'url') {
+      label = String(source.url || '').trim();
+      if (!/^https?:\/\/\S+$/i.test(label)) throw new Error('Enter an http(s) address.');
+    } else {
+      throw new Error('Unknown source.');
+    }
+    if (loaded && loaded.label === label && kind === 'url') return loaded;
+    loaded = { doc: await readSource(label, { cwd }), label };
+    return loaded;
+  }
+
+  // Prévia: o que a importação criaria e atualizaria, sem gravar nada
+  function previewOf({ doc, label }) {
+    const result = importIntoProject({ cwd, doc, source: label, dryRun: true });
+    return {
+      source: label,
+      format: result.format,
+      formatName: formatName(result.format),
+      title: result.title || '',
+      operations: result.operations,
+      created: result.created.length,
+      updated: result.updated.length + result.unchanged.length,
+      folders: result.folders,
+      base_url: result.base_url || null,
+      warnings: result.warnings,
+    };
+  }
 
   function snapshot() {
     const times = new Map();
@@ -111,6 +187,7 @@ export function createSetup({ cwd, agent = false }) {
       const routes = findRoutes(cwd, files);
       project = {
         name: projectName(cwd),
+        sources: projectSources(cwd, files),
         ...projectStats(cwd, files),
         routes: routes.count,
         routeFiles: routes.files.length,
@@ -130,6 +207,9 @@ export function createSetup({ cwd, agent = false }) {
       plan = [];
       project = null;
       suggested = answers;
+      uploaded = null;
+      loaded = null;
+      imported = null;
       before = snapshot();
       submittedAt = 0;
       finishedAt = 0;
@@ -149,8 +229,22 @@ export function createSetup({ cwd, agent = false }) {
       };
     },
 
+    /** Prévia de uma especificação (arquivo do projeto ou URL), sem gravar nada. */
+    async preview(source) {
+      return previewOf(await loadSource(source));
+    },
+
+    /** Arquivo enviado pelo navegador (fica só na memória): devolve a prévia. */
+    upload(name, data) {
+      if (!data || !data.length) throw new Error('Empty file');
+      if (data.length > MAX_SOURCE_BYTES) throw new Error('The file is larger than 10 MB.');
+      const label = path.basename(String(name || 'upload.json'));
+      uploaded = { name: label, doc: parseSource(data.toString('utf8'), label) };
+      return previewOf({ doc: uploaded.doc, label });
+    },
+
     /** Respostas do wizard. Lança erro com mensagem legível se forem inválidas. */
-    submit(answers = {}) {
+    async submit(answers = {}) {
       if (!fs.existsSync(rhylaPath)) throw new Error(`No ${DOCS_DIR}/ folder. Run "rhyla init" first.`);
       if (!MODE_KEYS.includes(answers.mode)) throw new Error('Choose a mode.');
       if (typeof answers.language !== 'string' || !answers.language.trim()) throw new Error('Choose a language.');
@@ -158,8 +252,18 @@ export function createSetup({ cwd, agent = false }) {
       // Título e logo são opcionais: em branco, o agente escolhe
       const title = typeof answers.title === 'string' ? answers.title.trim() : '';
       const logo = typeof answers.logo === 'string' ? answers.logo : null;
+      // Lê a especificação antes de gravar qualquer coisa: um erro aqui não deixa nada pela metade
+      const source = answers.source && answers.source.kind && answers.source.kind !== 'none' ? await loadSource(answers.source) : null;
       updateConfig(rhylaPath, { title: title || undefined, logo });
-      siteTodo = !title || !logo ? { title: !title, logo: logo ? null : findLogoCandidates(cwd) } : null;
+      // O título que o usuário escreveu vence o da especificação
+      imported = source ? { ...importIntoProject({ cwd, doc: source.doc, source: source.label }), source: source.label } : null;
+      // Sem título do usuário, o da especificação substitui o provisório (template ou nome do pacote)
+      const current = loadConfig(rhylaPath).title;
+      if (!title && imported && imported.title && (!current || [...TEMPLATE_TITLES, projectName(cwd)].includes(current))) {
+        updateConfig(rhylaPath, { title: imported.title });
+      }
+      const titled = Boolean(title || (imported && imported.title));
+      siteTodo = !titled || !logo ? { title: !titled, logo: logo ? null : findLogoCandidates(cwd) } : null;
       const preferences = savePreferences(rhylaPath, {
         language: answers.language,
         mode: answers.mode,
@@ -171,14 +275,14 @@ export function createSetup({ cwd, agent = false }) {
       phase = 'saved';
       submittedAt = Date.now();
       finishedAt = 0;
-      for (const resolve of waiters) resolve({ status: 'saved', preferences, siteTodo });
+      for (const resolve of waiters) resolve({ status: 'saved', preferences, siteTodo, imported });
       waiters = [];
       return preferences;
     },
 
     /** Espera o usuário responder, por até `ms`. */
     wait(ms) {
-      if (phase !== 'open' && phase !== 'idle') return Promise.resolve({ status: 'saved', preferences: readPreferences(rhylaPath), siteTodo });
+      if (phase !== 'open' && phase !== 'idle') return Promise.resolve({ status: 'saved', preferences: readPreferences(rhylaPath), siteTodo, imported });
       return new Promise((resolve) => {
         const timer = setTimeout(() => {
           waiters = waiters.filter((w) => w !== done);

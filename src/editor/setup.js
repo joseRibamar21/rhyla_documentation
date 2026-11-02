@@ -1,9 +1,11 @@
-// Wizard de configuração da documentação (rhyla dev): idioma, modo, fluxograma e revisão.
+// Wizard de configuração da documentação (rhyla dev): importar uma especificação, identidade,
+// idioma, modo, fluxograma e revisão.
 // Depois de enviar, acompanha a geração feita pelo agente até a documentação ficar pronta.
 
 const API = '/__rhyla/api/setup';
-const STEPS = ['identity', 'language', 'mode', 'flows', 'review'];
+const STEPS = ['source', 'identity', 'language', 'mode', 'flows', 'review'];
 const LOGO_MAX = 2 * 1024 * 1024;
+const SOURCE_MAX = 10 * 1024 * 1024;
 // Valores salvos (o agente lê em inglês); os rótulos mostrados vêm de TEXT
 const LANGUAGES = [['Português (Brasil)', 'pt', 'Guia de instalação'], ['English', 'en', 'Installation guide'], ['Español', 'es', 'Guía de instalación']];
 const AUDIENCES = ['Developers who use the API or library', 'Developers who work on this code', 'Both'];
@@ -19,7 +21,26 @@ const TEXT = {
     metrics: { files: 'arquivos', lines: 'linhas', routes: 'rotas' },
     routesMore: (n) => `+ ${plural(n, 'rota', 'rotas')}`,
     noRoutes: 'Nenhuma rota HTTP encontrada automaticamente.',
-    steps: ['Identidade', 'Idioma', 'Modo', 'Fluxograma', 'Revisão'],
+    steps: ['Importar', 'Identidade', 'Idioma', 'Modo', 'Fluxograma', 'Revisão'],
+    sourceTitle: 'Já tem a API descrita em Swagger ou Postman?',
+    sourceLead: 'Importe o arquivo e as páginas de todas as rotas saem dele na hora, sem o agente ler o código das rotas: mais rápido e sem gastar tokens. Depois o agente escreve só o que o arquivo não diz.',
+    sourceFound: 'Encontrado no projeto',
+    sourceRoutes: (n) => plural(n, 'rota', 'rotas'),
+    sourceUpload: ['Enviar um arquivo', 'OpenAPI / Swagger (JSON ou YAML) ou coleção do Postman v2.1, até 10 MB.'],
+    sourceUrl: ['Usar uma URL', 'O endereço do JSON, ex.: http://localhost:3000/docs/json'],
+    sourceNone: ['Não tenho', 'O agente lê o código e escreve as páginas das rotas.'],
+    sourceDrop: 'Arraste o arquivo ou clique para escolher',
+    sourceLoad: 'Carregar',
+    sourceReading: 'Lendo…',
+    sourceTooBig: 'O arquivo passa de 10 MB.',
+    sourcePick: 'Escolha o arquivo ou informe a URL, ou marque "Não tenho".',
+    sourceSummary: (p) => `${p.formatName}: ${plural(p.operations, 'rota', 'rotas')}`,
+    sourceWill: (p) => [p.created ? `${plural(p.created, 'página nova', 'páginas novas')}` : '', p.updated ? `${plural(p.updated, 'página que já existe recebe', 'páginas que já existem recebem')} o bloco da API, mantendo o texto` : ''].filter(Boolean).join(' · '),
+    sourceServer: 'Servidor',
+    sourceWarnings: (n) => plural(n, 'aviso', 'avisos'),
+    sourceNoPages: 'Nenhuma rota encontrada neste arquivo.',
+    sourceNoneValue: 'Ler o código',
+    modeImported: 'As páginas das rotas vêm do arquivo importado; o modo decide o que o agente escreve além delas.',
     identityTitle: 'Como a documentação vai se chamar?',
     identityLead: 'O título e a logo aparecem no topo de todas as páginas. Os dois são opcionais: em branco, o agente escolhe a partir do projeto.',
     titleLabel: 'Título (opcional)',
@@ -66,7 +87,7 @@ const TEXT = {
     flowsNo: ['Sem fluxograma', 'Só as páginas, sem diagramas de processo.'],
     reviewTitle: 'Tudo pronto para gerar',
     reviewLead: 'Confira as escolhas. Dá para mudar depois rodando /rhyla:init de novo.',
-    summary: { language: 'Idioma', mode: 'Modo', flows: 'Fluxograma' },
+    summary: { source: 'Rotas', language: 'Idioma', mode: 'Modo', flows: 'Fluxograma' },
     edit: 'Alterar',
     advanced: 'Opções avançadas',
     audience: 'Quem vai ler',
@@ -99,7 +120,26 @@ const TEXT = {
     metrics: { files: 'files', lines: 'lines', routes: 'routes' },
     routesMore: (n) => `+ ${plural(n, 'route', 'routes')}`,
     noRoutes: 'No HTTP routes found automatically.',
-    steps: ['Identity', 'Language', 'Mode', 'Flowcharts', 'Review'],
+    steps: ['Import', 'Identity', 'Language', 'Mode', 'Flowcharts', 'Review'],
+    sourceTitle: 'Is the API already described in Swagger or Postman?',
+    sourceLead: 'Import the file and the pages of every route come out of it right away, without the agent reading the route code: faster and no tokens spent. The agent then writes only what the file does not say.',
+    sourceFound: 'Found in the project',
+    sourceRoutes: (n) => plural(n, 'route', 'routes'),
+    sourceUpload: ['Upload a file', 'OpenAPI / Swagger (JSON or YAML) or a Postman collection v2.1, up to 10 MB.'],
+    sourceUrl: ['Use a URL', 'The address of the JSON, e.g. http://localhost:3000/docs/json'],
+    sourceNone: ['I don\'t have one', 'The agent reads the code and writes the route pages.'],
+    sourceDrop: 'Drop the file or click to choose',
+    sourceLoad: 'Load',
+    sourceReading: 'Reading…',
+    sourceTooBig: 'The file is larger than 10 MB.',
+    sourcePick: 'Choose the file or enter the URL, or pick "I don\'t have one".',
+    sourceSummary: (p) => `${p.formatName}: ${plural(p.operations, 'route', 'routes')}`,
+    sourceWill: (p) => [p.created ? `${plural(p.created, 'new page', 'new pages')}` : '', p.updated ? `${plural(p.updated, 'existing page gets', 'existing pages get')} the API block, keeping the text` : ''].filter(Boolean).join(' · '),
+    sourceServer: 'Server',
+    sourceWarnings: (n) => plural(n, 'warning', 'warnings'),
+    sourceNoPages: 'No routes found in this file.',
+    sourceNoneValue: 'Read the code',
+    modeImported: 'The route pages come from the imported file; the mode decides what the agent writes besides them.',
     identityTitle: 'What should the docs be called?',
     identityLead: 'The title and the logo show up at the top of every page. Both are optional: left empty, the agent picks them from the project.',
     titleLabel: 'Title (optional)',
@@ -146,7 +186,7 @@ const TEXT = {
     flowsNo: ['Without flowcharts', 'Only the pages, no process diagrams.'],
     reviewTitle: 'Ready to generate',
     reviewLead: 'Check your choices. You can change them later by running /rhyla:init again.',
-    summary: { language: 'Language', mode: 'Mode', flows: 'Flowcharts' },
+    summary: { source: 'Routes', language: 'Language', mode: 'Mode', flows: 'Flowcharts' },
     edit: 'Change',
     advanced: 'Advanced options',
     audience: 'Who will read it',
@@ -179,7 +219,26 @@ const TEXT = {
     metrics: { files: 'archivos', lines: 'líneas', routes: 'rutas' },
     routesMore: (n) => `+ ${plural(n, 'ruta', 'rutas')}`,
     noRoutes: 'No se encontraron rutas HTTP automáticamente.',
-    steps: ['Identidad', 'Idioma', 'Modo', 'Diagramas', 'Revisión'],
+    steps: ['Importar', 'Identidad', 'Idioma', 'Modo', 'Diagramas', 'Revisión'],
+    sourceTitle: '¿La API ya está descrita en Swagger o Postman?',
+    sourceLead: 'Importa el archivo y las páginas de todas las rutas salen de él al instante, sin que el agente lea el código de las rutas: más rápido y sin gastar tokens. Después el agente escribe solo lo que el archivo no dice.',
+    sourceFound: 'Encontrado en el proyecto',
+    sourceRoutes: (n) => plural(n, 'ruta', 'rutas'),
+    sourceUpload: ['Subir un archivo', 'OpenAPI / Swagger (JSON o YAML) o una colección de Postman v2.1, hasta 10 MB.'],
+    sourceUrl: ['Usar una URL', 'La dirección del JSON, ej.: http://localhost:3000/docs/json'],
+    sourceNone: ['No tengo', 'El agente lee el código y escribe las páginas de las rutas.'],
+    sourceDrop: 'Arrastra el archivo o haz clic para elegir',
+    sourceLoad: 'Cargar',
+    sourceReading: 'Leyendo…',
+    sourceTooBig: 'El archivo supera los 10 MB.',
+    sourcePick: 'Elige el archivo o indica la URL, o marca "No tengo".',
+    sourceSummary: (p) => `${p.formatName}: ${plural(p.operations, 'ruta', 'rutas')}`,
+    sourceWill: (p) => [p.created ? `${plural(p.created, 'página nueva', 'páginas nuevas')}` : '', p.updated ? `${plural(p.updated, 'página existente recibe', 'páginas existentes reciben')} el bloque de la API, conservando el texto` : ''].filter(Boolean).join(' · '),
+    sourceServer: 'Servidor',
+    sourceWarnings: (n) => plural(n, 'aviso', 'avisos'),
+    sourceNoPages: 'No se encontraron rutas en este archivo.',
+    sourceNoneValue: 'Leer el código',
+    modeImported: 'Las páginas de las rutas vienen del archivo importado; el modo decide qué escribe el agente además de ellas.',
     identityTitle: '¿Cómo se llamará la documentación?',
     identityLead: 'El título y el logo aparecen en la parte superior de todas las páginas. Ambos son opcionales: vacíos, el agente los elige a partir del proyecto.',
     titleLabel: 'Título (opcional)',
@@ -226,7 +285,7 @@ const TEXT = {
     flowsNo: ['Sin diagramas', 'Solo las páginas, sin diagramas de procesos.'],
     reviewTitle: 'Todo listo para generar',
     reviewLead: 'Revisa tus elecciones. Puedes cambiarlas después ejecutando /rhyla:init de nuevo.',
-    summary: { language: 'Idioma', mode: 'Modo', flows: 'Diagramas' },
+    summary: { source: 'Rutas', language: 'Idioma', mode: 'Modo', flows: 'Diagramas' },
     edit: 'Cambiar',
     advanced: 'Opciones avanzadas',
     audience: 'Quién lo leerá',
@@ -273,6 +332,7 @@ const ART = {
   flowsNo: `<svg viewBox="0 0 132 72" aria-hidden="true">${[8, 24, 40, 56].map((y) => line(14, y, 104 - (y % 3) * 10)).join('')}</svg>`,
 };
 const MARK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>';
+const FILE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13l-2 2 2 2M15 13l2 2-2 2"/></svg>';
 const UPLOAD = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>';
 const check = (size) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 const CHECK = check(12);
@@ -301,7 +361,9 @@ const state = {
   step: 0,
   visited: 0,
   ui: 'en',
-  answers: { title: '', logo: null, language: '', otherLanguage: '', mode: 'balanced', flows: false, audience: AUDIENCES[2], examples: ['curl'], notes: '' },
+  answers: { source: { kind: 'none' }, title: '', logo: null, language: '', otherLanguage: '', mode: 'balanced', flows: false, audience: AUDIENCES[2], examples: ['curl'], notes: '' },
+  // Prévia da especificação escolhida (ou o erro dela), a URL digitada e se está lendo
+  source: { preview: null, error: '', busy: false, url: '', key: '' },
   logoVersion: 0,
   uploading: false,
   audienceTouched: false,
@@ -328,6 +390,13 @@ function chosenLanguage() {
 }
 
 const modeName = (mode) => t().modes[mode][0];
+const sourceKey = (src) => (src.kind === 'file' ? `file:${src.path}` : src.kind === 'url' ? `url:${src.url}` : src.kind);
+const sourceName = () => {
+  const src = state.answers.source;
+  if (src.kind === 'none') return t().sourceNoneValue;
+  const p = state.source.preview;
+  return p ? `${p.source} · ${t().sourceRoutes(p.operations)}` : src.path || src.url || '';
+};
 const flowsName = (flows) => (flows ? t().flowsYes : t().flowsNo)[0];
 const methodOf = (slug) => (slug.split('/').pop().match(/^(get|post|put|patch|delete)-/i) || [])[1];
 const formatTime = (ms) => {
@@ -360,7 +429,7 @@ function renderProject() {
 function stepValue(i) {
   const a = state.answers;
   if (i > state.visited || i === STEPS.length - 1) return '';
-  return [a.title.trim() || t().agentPicks, chosenLanguage(), modeName(a.mode), flowsName(a.flows)][i] || '';
+  return [sourceName(), a.title.trim() || t().agentPicks, chosenLanguage(), modeName(a.mode), flowsName(a.flows)][i] || '';
 }
 
 function renderSteps() {
@@ -454,7 +523,127 @@ async function uploadLogo(file) {
   }
 }
 
+// Prévia da especificação: arquivo do projeto, URL ou arquivo enviado (o servidor só lê, não grava)
+async function loadPreview(src, request) {
+  const key = sourceKey(src);
+  state.source = { ...state.source, busy: true, error: '', preview: null, key };
+  render(false);
+  try {
+    const res = await request();
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || res.statusText);
+    if (state.source.key !== key) return;
+    state.source = { ...state.source, busy: false, preview: body };
+  } catch (err) {
+    if (state.source.key !== key) return;
+    state.source = { ...state.source, busy: false, error: err.message };
+  }
+  render(false);
+}
+
+function chooseSource(src) {
+  // Voltar para "Enviar um arquivo" mantém o arquivo já enviado
+  if (src.kind === 'upload' && state.source.key === 'upload' && state.answers.source.name) src = { ...src, name: state.answers.source.name };
+  state.answers.source = src;
+  if (src.kind === 'none') {
+    state.source = { ...state.source, preview: null, error: '', busy: false, key: 'none' };
+    render(false);
+    autoAdvance();
+    return;
+  }
+  if (src.kind === 'file') {
+    if (state.source.key === sourceKey(src) && (state.source.preview || state.source.busy)) return;
+    loadPreview(src, () => fetch(`${API}/source`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(src) }));
+    return;
+  }
+  // Upload e URL: esperam o arquivo ou o endereço
+  if (state.source.key !== sourceKey(src)) state.source = { ...state.source, preview: null, error: '', key: '' };
+  render(false);
+  if (src.kind === 'url') { const input = $('su-source-url'); if (input) input.focus(); }
+}
+
+function uploadSource(file) {
+  if (!file) return;
+  if (file.size > SOURCE_MAX) { state.source = { ...state.source, error: t().sourceTooBig, preview: null }; render(false); return; }
+  state.answers.source = { kind: 'upload', name: file.name };
+  loadPreview({ kind: 'upload' }, () => fetch(`${API}/source/upload?name=${encodeURIComponent(file.name)}`, { method: 'POST', body: file }));
+}
+
+function loadUrl() {
+  const url = state.source.url.trim();
+  state.answers.source = { kind: 'url', url };
+  loadPreview(state.answers.source, () => fetch(`${API}/source`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'url', url }) }));
+}
+
+function sourcePreview() {
+  const s = state.source;
+  if (s.busy) return h('div', { class: 'su-source-preview is-busy' }, h('span', { class: 'su-spinner', 'aria-hidden': 'true' }), t().sourceReading);
+  if (s.error) return h('div', { class: 'su-source-preview is-error', role: 'alert' }, s.error);
+  const p = s.preview;
+  if (!p) return null;
+  if (!p.operations) return h('div', { class: 'su-source-preview is-error', role: 'alert' }, t().sourceNoPages);
+  return h('div', { class: 'su-source-preview' },
+    h('div', { class: 'su-source-head' },
+      h('span', { class: 'su-source-icon', html: FILE }),
+      h('span', { class: 'su-source-name' }, p.title || p.source),
+      h('span', { class: 'su-source-count' }, t().sourceSummary(p))),
+    h('p', { class: 'su-source-will' }, t().sourceWill(p)),
+    h('div', { class: 'su-source-folders' }, p.folders.slice(0, 12).map((f) => h('span', { class: 'su-chip' }, `${f.folder}/`, h('b', {}, String(f.count))))),
+    p.base_url ? h('p', { class: 'su-source-server' }, `${t().sourceServer}: `, h('code', {}, p.base_url)) : null,
+    p.warnings.length ? h('details', { class: 'su-source-warnings' },
+      h('summary', {}, t().sourceWarnings(p.warnings.length)),
+      h('ul', {}, p.warnings.map((w) => h('li', {}, w)))) : null);
+}
+
 const VIEWS = {
+  source() {
+    const a = state.answers;
+    const found = (project().sources || []).filter((src) => !src.error && src.operations);
+    const selected = (kind, extra = {}) => a.source.kind === kind && Object.entries(extra).every(([k, v]) => a.source[k] === v);
+    const keys = { n: 0 };
+    const key = () => String(++keys.n);
+    const fileInput = h('input', { type: 'file', accept: '.json,.yaml,.yml,application/json,application/yaml', onchange: (e) => uploadSource(e.target.files[0]) });
+    const drop = h('label', { class: `su-drop su-drop-sm${state.source.busy && a.source.kind === 'upload' ? ' is-busy' : ''}` },
+      h('span', { class: 'su-drop-icon', html: UPLOAD }),
+      h('span', { class: 'su-drop-text' }, a.source.kind === 'upload' && a.source.name ? a.source.name : t().sourceDrop),
+      fileInput);
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('is-over'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('is-over'));
+    drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('is-over'); uploadSource(e.dataTransfer.files[0]); });
+    const urlRow = h('div', { class: 'su-source-url' },
+      h('input', {
+        class: 'su-input', id: 'su-source-url', type: 'url', value: state.source.url, placeholder: 'http://localhost:3000/docs/json', spellcheck: 'false',
+        oninput: (e) => { state.source.url = e.target.value; },
+        onkeydown: (e) => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); loadUrl(); } },
+      }),
+      h('button', { type: 'button', class: 'su-btn su-btn-sm', onclick: loadUrl }, t().sourceLoad));
+    const [upTitle, upText] = t().sourceUpload;
+    const [urlTitle, urlText] = t().sourceUrl;
+    const [noneTitle, noneText] = t().sourceNone;
+    const showPreview = a.source.kind !== 'none';
+    return {
+      title: t().sourceTitle,
+      lead: t().sourceLead,
+      body: [
+        h('div', { class: 'su-options is-sources' },
+          found.map((src) => option({
+            name: 'source', value: src.path, checked: selected('file', { path: src.path }), key: key(),
+            title: h('span', { class: 'su-source-path' }, src.path),
+            tag: `${src.formatName} · ${t().sourceRoutes(src.operations)}`,
+            text: src.title || null,
+            badge: t().sourceFound,
+            onchange: () => chooseSource({ kind: 'file', path: src.path }),
+          })),
+          option({ name: 'source', value: 'upload', checked: selected('upload'), title: upTitle, text: upText, key: key(), onchange: () => chooseSource({ kind: 'upload' }) }),
+          option({ name: 'source', value: 'url', checked: selected('url'), title: urlTitle, text: urlText, key: key(), onchange: () => chooseSource({ kind: 'url', url: state.source.url.trim() }) }),
+          option({ name: 'source', value: 'none', checked: selected('none'), title: noneTitle, text: noneText, key: key(), onchange: () => chooseSource({ kind: 'none' }) })),
+        a.source.kind === 'upload' ? drop : null,
+        a.source.kind === 'url' ? urlRow : null,
+        showPreview ? sourcePreview() : null,
+      ],
+    };
+  },
+
   identity() {
     const a = state.answers;
     const fileInput = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/svg+xml,image/webp,image/gif,image/avif', onchange: (e) => uploadLogo(e.target.files[0]) });
@@ -548,7 +737,7 @@ const VIEWS = {
     const estimate = { essential: t().pages(p.routes + 1), balanced: t().pages(p.routes + 2), complete: t().pagesPlus(p.routes + 5) };
     return {
       title: t().modeTitle,
-      lead: t().modeLead,
+      lead: a.source.kind !== 'none' && state.source.preview ? `${t().modeLead} ${t().modeImported}` : t().modeLead,
       body: h('div', { class: 'su-options is-modes' }, MODES.map((mode, i) => {
         const [title, tag, text] = t().modes[mode];
         return option({
@@ -601,10 +790,11 @@ const VIEWS = {
               a.logo ? h('img', { src: logoSrc(), alt: '' }) : h('span', { class: 'rh-brand-mark', html: MARK }),
               h('span', { class: 'su-tile-value' }, a.title.trim() || t().agentPicks)),
             a.logo ? null : h('span', { class: 'su-tile-sub' }, t().logoByAgent),
-            h('button', { type: 'button', class: 'su-link', onclick: () => goTo(0) }, t().edit)),
-          tile(s.language, chosenLanguage(), null, 1),
-          tile(s.mode, modeName(a.mode), t().modes[a.mode][1], 2),
-          tile(s.flows, flowsName(a.flows), null, 3)),
+            h('button', { type: 'button', class: 'su-link', onclick: () => goTo(1) }, t().edit)),
+          tile(s.source, a.source.kind === 'none' ? t().sourceNoneValue : (state.source.preview && state.source.preview.source) || '', a.source.kind === 'none' ? null : state.source.preview && t().sourceSummary(state.source.preview), 0),
+          tile(s.language, chosenLanguage(), null, 2),
+          tile(s.mode, modeName(a.mode), t().modes[a.mode][1], 3),
+          tile(s.flows, flowsName(a.flows), null, 4)),
         h('details', { class: 'su-advanced' },
           h('summary', {}, t().advanced),
           h('div', { class: 'su-advanced-body' },
@@ -639,7 +829,7 @@ function render(animate = true) {
     h('span', { class: 'su-kicker' }, t().stepOf(state.step + 1, STEPS.length)),
     h('h1', {}, view.title),
     h('p', { class: 'su-lead' }, view.lead),
-    ...[].concat(view.body));
+    ...[].concat(view.body).filter(Boolean));
   if (animate) { void stage.offsetWidth; stage.classList.add('is-enter'); }
   if (STEPS[state.step] === 'identity' && animate) $('su-title').focus();
 
@@ -666,6 +856,16 @@ function goTo(step) {
 function next() {
   clearTimeout(state.advanceTimer);
   if (state.uploading) return;
+  if (STEPS[state.step] === 'source') {
+    const src = state.answers.source;
+    if (state.source.busy) return;
+    if (src.kind !== 'none' && (!state.source.preview || !state.source.preview.operations || state.source.key !== sourceKey(src.kind === 'upload' ? { kind: 'upload' } : src))) {
+      $('su-error').textContent = state.source.error || t().sourcePick;
+      return;
+    }
+    // Sem título escolhido, o da especificação vira a sugestão (o usuário pode trocar)
+    if (src.kind !== 'none' && !state.answers.title.trim() && state.source.preview.title) state.answers.title = state.source.preview.title;
+  }
   if (STEPS[state.step] === 'language' && !chosenLanguage()) {
     $('su-error').textContent = t().chooseLanguage;
     return;
@@ -688,7 +888,7 @@ async function submit() {
     const res = await fetch(API, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: a.title.trim(), logo: a.logo, language: chosenLanguage(), mode: a.mode, flows: a.flows, audience: a.audience, examples: a.examples, notes: a.notes }),
+      body: JSON.stringify({ source: a.source, title: a.title.trim(), logo: a.logo, language: chosenLanguage(), mode: a.mode, flows: a.flows, audience: a.audience, examples: a.examples, notes: a.notes }),
     });
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || res.statusText);
@@ -829,6 +1029,7 @@ async function start() {
   });
   state.ui = initialUi(saved.language);
   renderProject();
+  const firstSource = (state.info.project.sources || []).find((src) => !src.error && src.operations);
 
   // Recarregou a página depois de enviar: volta direto para o progresso
   if (state.info.agent && ['saved', 'building', 'done'].includes(state.info.phase)) {
@@ -836,6 +1037,7 @@ async function start() {
     return;
   }
   render();
+  if (firstSource) chooseSource({ kind: 'file', path: firstSource.path });
 }
 
 start();

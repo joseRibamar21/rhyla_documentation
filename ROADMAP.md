@@ -18,7 +18,7 @@ The agent enters a project, writes its documentation site from the source code a
 
 - [x] Commands (MCP prompts, `/rhyla:<name>` in Claude Code): `init`, `sync`, `page`, `flow`, `preview`, `clear`
 - [x] `sync` updates only what changed since the last synced commit (`rhyla-docs/sync.json`)
-- [x] Setup wizard in the browser (`/__rhyla/setup`, in Portuguese, English and Spanish): language, mode, flowcharts; then live progress while the agent writes. The answers are saved as preferences that every command follows
+- [x] Setup wizard in the browser (`/__rhyla/setup`, in Portuguese, English and Spanish): import a spec or a Postman collection, language, mode, flowcharts; then live progress while the agent writes. The answers are saved as preferences that every command follows
 - [x] Modes: Essential (routes only, the cheapest), Balanced (routes with context) and Complete (the whole project)
 - [x] Site title and logo in the first step of the wizard (optional: the agent picks them from the project, with the logo files Rhyla finds); `logo` in `config.json` replaces the default mark in the header
 - [x] `find_routes`: Rhyla finds the HTTP routes itself (Express, Fastify, Koa, Hono, Nest, Next.js), with prefixes mounted in other files
@@ -79,7 +79,11 @@ A standard `api` block in the frontmatter of each route page: the contract of th
 - [x] The page reference is generated from the block: endpoint, authentication, parameter and field tables (nested objects, enums, defaults, limits), responses and examples
 - [x] Request examples (curl, JavaScript, Python) generated from the block, following the preferences and `api.base_url`
 - [x] `openapi.json` (OpenAPI 3.0) in `rhyla build`, at `/openapi.json` in `rhyla dev` and with `rhyla openapi export`
-- [x] `rhyla openapi import` and the `import_openapi` MCP tool: OpenAPI 3 / Swagger 2, JSON or YAML, file or URL; `$ref`s resolved; importing again replaces only the blocks and keeps the text
+- [x] `rhyla import` and the `import_openapi` MCP tool: OpenAPI 3 / Swagger 2, JSON or YAML, file or URL; `$ref`s resolved; importing again replaces only the blocks and keeps the text
+- [x] Postman collections (v2.0 / v2.1): folders, `{{baseUrl}}`, path variables, inherited auth, saved example responses with their fields, the login route from the test script; secrets (tokens, passwords, keys) left out
+- [x] Import as the first step of the setup wizard (specs found in the project, upload or URL, with a preview) and `rhyla init --import`; `find_routes` and `ask_preferences` point to Postman collections too
+- [ ] The Swagger UI address works too (find the JSON inside the page)
+- [ ] Postman environments become `api.environments` (servers of the Try it panel)
 - [x] `find_routes` points to OpenAPI files and generators (`@fastify/swagger`, `@nestjs/swagger`, `swagger-jsdoc`…); the agent writes the block and gets `api_warnings` back
 - [x] `rhyla check` for CI (and `check_docs` for the agent): routes in the code without a page, pages of routes that no longer exist, invalid blocks; warnings for pages without a block, duplicates, broken flows and broken links; GitHub Actions annotations
 - [ ] Method badge in the sidebar from the block when the file name has none
