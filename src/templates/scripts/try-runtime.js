@@ -34,7 +34,7 @@
       confirmWrite: function (m, h) { return 'Enviar ' + m + ' para ' + h + '?\n\nNão é localhost: a requisição pode alterar dados de verdade.'; },
       network: 'Sem resposta', cors: 'Sem resposta da API. No site publicado ela precisa aceitar CORS deste endereço, e precisa estar no ar.',
       direct: 'Requisições direto para a API (ela precisa aceitar CORS).', shortcut: 'Ctrl + Enter envia',
-      login: 'Rota de login',
+      login: 'Rota de login', thisSite: 'Este site',
     },
     en: {
       open: 'Try it', title: 'Try this route', close: 'Close', wide: 'Widen', reset: 'Back to the example values',
@@ -54,7 +54,7 @@
       confirmWrite: function (m, h) { return 'Send ' + m + ' to ' + h + '?\n\nThis is not localhost: the request may change real data.'; },
       network: 'No response', cors: 'No response from the API. On the published site it must allow CORS from this address, and be online.',
       direct: 'Requests go straight to the API (it must allow CORS).', shortcut: 'Ctrl + Enter sends',
-      login: 'Login route',
+      login: 'Login route', thisSite: 'This site',
     },
     es: {
       open: 'Probar', title: 'Probar la ruta', close: 'Cerrar', wide: 'Ensanchar', reset: 'Volver a los valores de ejemplo',
@@ -74,7 +74,7 @@
       confirmWrite: function (m, h) { return '¿Enviar ' + m + ' a ' + h + '?\n\nNo es localhost: la solicitud puede cambiar datos reales.'; },
       network: 'Sin respuesta', cors: 'Sin respuesta de la API. En el sitio publicado debe aceptar CORS de esta dirección, y estar en línea.',
       direct: 'Solicitudes directas a la API (debe aceptar CORS).', shortcut: 'Ctrl + Enter envía',
-      login: 'Ruta de login',
+      login: 'Ruta de login', thisSite: 'Este sitio',
     },
   };
   var L = LABELS[data.lang] || LABELS.en;
@@ -179,6 +179,20 @@
   /* ---------- Estado inicial ---------- */
 
   var servers = Array.isArray(data.servers) ? data.servers : [];
+  // Site publicado (sem o proxy do dev): servido pela própria API (rhyla/serve em /docs), a
+  // mesma origem dispensa CORS. localhost e 127.0.0.1 na mesma porta são a mesma máquina, mas
+  // para o navegador são origens diferentes: usa o endereço da página
+  if (data.mode === 'direct' && /^https?:$/.test(location.protocol)) {
+    var here = location.origin;
+    servers = servers.map(function (s) {
+      try {
+        var u = new URL(s.url);
+        var same = u.origin !== here && u.port === location.port && LOOPBACK.test(u.hostname) && LOOPBACK.test(location.hostname);
+        return same ? { name: s.name === s.url ? here + u.pathname.replace(/\/$/, '') : s.name, url: here + u.pathname.replace(/\/$/, '') } : s;
+      } catch (e) { return s; }
+    });
+    if (!servers.some(function (s) { return s.url === here || s.url.indexOf(here + '/') === 0; })) servers.push({ name: L.thisSite, url: here });
+  }
   function initialServer() {
     var saved = local.get('rhyla-try:server');
     if (typeof saved === 'string' && saved) return saved;
@@ -252,10 +266,14 @@
   var errorBox = el('div', { class: 'rh-try-error', role: 'alert', hidden: true });
   var sendBtn = el('button', { type: 'button', class: 'rh-try-send', onclick: function () { send(); } }, [L.send]);
   var curlBtn = el('button', { type: 'button', class: 'rh-try-secondary', onclick: function () { copyText(curl(buildRequest().request), curlBtn, L.copyCurl); } }, [L.copyCurl]);
-  var foot = el('footer', { class: 'rh-try-foot' }, [
-    el('span', { class: 'rh-try-hint', text: data.mode === 'direct' ? L.direct : L.shortcut }),
-    curlBtn, sendBtn,
-  ]);
+  var hint = el('span', { class: 'rh-try-hint' });
+  var foot = el('footer', { class: 'rh-try-foot' }, [hint, curlBtn, sendBtn]);
+  // No site publicado, o aviso de CORS só vale para outra origem
+  function updateHint() {
+    var crossOrigin = false;
+    try { crossOrigin = data.mode === 'direct' && new URL(server).origin !== location.origin; } catch (e) {}
+    hint.textContent = crossOrigin ? L.direct : L.shortcut;
+  }
   var formArea = el('div', { class: 'rh-try-form' });
   var authArea = el('div');
   var responseArea = el('div', { class: 'rh-try-response', 'aria-live': 'polite' });
@@ -504,6 +522,7 @@
   }
 
   function updateUrl() {
+    updateHint();
     var r = buildRequest().request;
     urlLine.textContent = '';
     urlLine.appendChild(el('span', { class: 'http-tag http-tag--' + METHOD.toLowerCase(), text: METHOD }));

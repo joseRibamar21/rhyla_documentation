@@ -21,6 +21,7 @@ npx rhyla check   # route pages vs. routes in the code, for CI
 |---------|---------|
 | `init`  | `-f, --force` overwrite template files if `rhyla-docs/` already exists, `--blank` only the structure, without the sample pages, `--import <file\|url>` also write the route pages from a spec or a Postman collection |
 | `dev`   | `-p, --port <port>` (default `3333`), `-H, --host <host>` (default `127.0.0.1`) |
+| `build` | `-b, --base <base>` base path the site is served under (default: `base` in `config.json`) |
 | `serve` | `-b, --base <base>`, `-p, --port <port>`, `-d, --dir <dir>`, `--no-build` |
 | `mcp`   | `-d, --dir <dir>` project root, `--read-only` |
 | `import <file\|url>` | `--dry-run` only show what would change, `--no-update` leave existing route pages untouched (`openapi import` is the same command) |
@@ -293,22 +294,38 @@ Rhyla finds the HTTP routes itself (`find_routes`: Express, Fastify, Koa, Hono, 
 | `delete_page` | Delete a page (not the home or 404 pages) |
 | `clear_docs` | Delete every page and leave a blank home page |
 | `get_changes` / `mark_synced` | Code files changed since the last sync / record the sync |
+| `build_docs` | Run `rhyla build` (dist/ for publishing or for `rhyla/serve`); `sync` calls it when the project has a dist/ |
 | `start_preview` / `stop_preview` | Serve the site locally (same server as `rhyla dev`, port 3333 or the next free one) and return its URL |
 
 Agents that only edit files can follow `rhyla-docs/AGENTS.md`, which documents the layout, frontmatter and naming conventions.
 
 ---
 
-## 🚀 Serving under Express
+## 🚀 Serving the docs inside your API
+
+Like Swagger UI at `/docs`: `rhyla/serve` serves the site that `rhyla build` wrote to `dist/`, from your own API. It only reads files (no editors, no wizard), has no dependencies besides Node, and `/docs/openapi.json` and `/docs/llms.txt` come with it.
+
+1. Tell Rhyla where the site lives: `"base": "/docs"` in `rhyla-docs/config.json` (or `rhyla build --base /docs`).
+2. Build: `npx rhyla build`. Add it to your build script (`"build": "rhyla build && …"`), so a deploy always ships the current docs.
+3. Mount it:
 
 ```js
-import express from 'express';
-import RhylaClient from 'rhyla';
+import { rhyla, fastifyRhyla, rhylaFetch } from 'rhyla/serve';
 
-const app = express();
-RhylaClient.expressConfig(app, '/docs'); // serves ./dist under /docs
-app.listen(3000);
+app.use('/docs', rhyla());                              // Express, Connect, NestJS (Express)
+await app.register(fastifyRhyla, { prefix: '/docs' });  // Fastify, NestJS (Fastify)
+
+const docs = rhylaFetch({ base: '/docs' });             // Hono, Next.js route handlers, Bun, Deno
+app.get('/docs/*', (c) => docs(c.req.raw));
 ```
+
+- Options: `dir` (default `dist`), `cwd`, `quiet`.
+- `rhyla` must be a regular dependency of the API (not a devDependency) when the API serves the docs in production. CommonJS projects can `require('rhyla/serve')` on Node 20.19+ / 22.12+.
+- **Always in sync**: `rhyla build` writes `dist/rhyla.json` with the base path and the state of `rhyla-docs/`. When the pages change after the last build, the API, `rhyla dev` and the agent's `mark_synced` say so, with the command to run. When `dist/` is missing or was built for another path, `/docs` explains what to run instead of a broken page. The agent's `sync` rebuilds `dist/` itself (`build_docs`) when the project has one.
+- **Try it**: with `"api": { "try_it": true }`, the route pages get the Try it panel, and from inside the API the requests go to the same origin, with no CORS.
+- Protect it like any route: `app.use('/docs', basicAuth, rhyla())`, or mount it only outside production.
+
+`RhylaClient.expressConfig(app, '/docs')` from earlier versions still works.
 
 ---
 

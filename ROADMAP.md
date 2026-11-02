@@ -100,6 +100,16 @@ Run the routes from their pages: a panel in the bottom-right corner of every rou
 - [x] Optional in the published site (`api.try_it: true`, calling the API directly)
 - [ ] MCP tool for the agent to call the API and capture real responses (off by default)
 
+### Docs inside the API
+
+The built site served by the API itself, like Swagger UI at `/docs`.
+
+- [x] `rhyla/serve`: Node middleware (Express, Connect, NestJS), Fastify plugin and a Request → Response handler (Hono, Next.js, Bun, Deno); read-only, no dependencies, ETag and cache headers
+- [x] `rhyla build --base /docs` and `dist/rhyla.json` (base path, version, state of the sources)
+- [x] Warnings with the command to run: dist/ missing, built for another path, or older than rhyla-docs/ (in the API, in `rhyla dev` and in `mark_synced`)
+- [x] `build_docs` MCP tool; `sync` rebuilds dist/ when the project has one
+- [x] Try it panel from inside the API: same origin, no CORS
+
 ## 💡 Later
 
 - Core rewrite (2.0): single layout template, one base-path strategy, fewer moving parts in the browser runtime

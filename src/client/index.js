@@ -6,6 +6,8 @@ import express from 'express';
 const RhylaClient = {
     /**
      * Configura um app Express para servir a pasta dist sob um prefixo.
+     * Legado: prefira `app.use('/docs', rhyla())` de 'rhyla/serve' (Express, Fastify e fetch,
+     * sem reescrever o HTML a cada requisição).
      * @param {import('express').Express} app
      * @param {string} base e.g. '/docs'
      * @param {object} options { distDir?: string }
@@ -90,8 +92,8 @@ const RhylaClient = {
             next();
         };
 
-        // Aplica middleware de injeção de basePath
-        app.use(injectBasePath);
+        // Aplica middleware de injeção de basePath só nas rotas das docs (não no resto da API)
+        app.use(effectiveBase, injectBasePath);
 
         // Rota para servir arquivos estáticos
         app.use(effectiveBase, express.static(distDir, { extensions: ['html'] }));

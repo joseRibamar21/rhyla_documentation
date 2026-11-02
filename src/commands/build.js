@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import { generateSidebarHTML } from '../utils/sidebar.js';
-import { DOCS_DIR, loadConfig } from '../core/config.js';
+import { DOCS_DIR, loadConfig, normalizeBase } from '../core/config.js';
+import { writeManifest } from '../core/dist.js';
 import { createIgnoreMatcher } from '../core/ignore.js';
 import { createMarkdown, sanitizeHtml } from '../core/content.js';
 import { collectPages } from '../core/pages.js';
@@ -14,6 +16,7 @@ import { applyPageMeta, assemblePage } from '../core/layout.js';
 import { buildFlowGraph, decoratePage } from '../core/flows.js';
 
 const __filename = fileURLToPath(import.meta.url);
+const { version } = createRequire(import.meta.url)('../../package.json');
 const __dirname = path.dirname(__filename);
 
 // Pastas sempre ignoradas no build (kit de desenvolvimento só faz sentido no `rhyla dev`)
@@ -36,7 +39,8 @@ export default function build(opts = {}) {
   }
 
   const config = loadConfig(rhylaPath);
-  const basePath = config.base;
+  // --base vence o config.json (ex.: o dist/ servido pela API em /docs)
+  const basePath = opts.base !== undefined && opts.base !== null && opts.base !== '' ? normalizeBase(opts.base) : config.base;
   const siteUrl = config.siteUrl;
   const allowRawHtml = config.allowRawHtml;
   const ignorePatterns = [...new Set([...DEFAULT_IGNORE, ...config.buildIgnore])];
@@ -379,6 +383,9 @@ export default function build(opts = {}) {
     log(`ℹ️  site_url missing in ${DOCS_DIR}/config.json. Set "site_url" to generate sitemap.xml, robots.txt and absolute URLs.`);
   }
 
+  // Manifesto: base, versão e estado das fontes (o rhyla/serve e o `rhyla dev` avisam quando o dist/ fica para trás)
+  writeManifest(distPath, { base: basePath, version, rhylaPath, pages: pages.length, operations: openapi.operations });
+
   log(`✅ Build completed: ${pages.length} pages${flowGraph.flows.length ? `, ${flowGraph.flows.length} flows` : ''} → dist/ (search index, llms.txt, llms-full.txt, .md sources${openapi.operations ? `, openapi.json with ${openapi.operations} operations` : ''})`);
-  return { distPath, pages: pages.length, operations: openapi.operations };
+  return { distPath, base: basePath, pages: pages.length, operations: openapi.operations };
 }
