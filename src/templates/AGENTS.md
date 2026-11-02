@@ -6,10 +6,11 @@ This folder is a [Rhyla](https://rhyladoc.com/) documentation workspace. These a
 
 ```
 rhyla-docs/
-  config.json     # site settings (title, description, site_url, base, build_ignore, allow_raw_html)
+  config.json     # site settings (title, description, logo, site_url, base, build_ignore, allow_raw_html, preferences, api)
   header.html     # shared <head> + top bar (edit with care)
   styles/         # global.css, light.css, dark.css
   public/         # static assets, served at /public/...
+  sync.json       # last commit the docs were synced with (written by the MCP, commit it)
   body/           # ALL documentation pages live here
     home.md       # required: the landing page (route "/")
     notFound.html # 404 page
@@ -87,53 +88,69 @@ The file name carries the HTTP method and optional tags, shown as badges in the 
 - Tags (suffix): `-new`, `-dep` (deprecated), `-v1`, `-v2`, `-v1.2.0`…
 - Example: `body/users/post-create_user-new.md` → sidebar shows `POST create user [new]`.
 
-Suggested body for an endpoint page:
+Describe the endpoint in an `api` block in the frontmatter. Rhyla renders the reference from it (endpoint line, authentication, parameters, request body, responses and request examples in the languages chosen in the preferences), adds the endpoint to `openapi.json` and keeps it machine-readable. **Do not repeat any of that in the text**: the text says what the block cannot (what the route is for, business rules, side effects, errors explained, links). The reference is inserted after the introduction, before the first `## ` section.
 
 ````markdown
 ---
 title: Create user
 description: Creates a new user account.
+api:
+  method: POST
+  path: /api/users/:teamId          # ":id" or "{id}"
+  auth: bearer                      # bearer | basic | none | { type: apiKey, in: header, name: X-API-Key }
+  params:                           # path parameters (required)
+    teamId: { type: integer, description: Team that owns the user }
+  query:
+    notify: { type: boolean, default: true, description: Send a welcome email }
+  headers:
+    Idempotency-Key: { type: string, description: Repeating a key returns the first result }
+  body:                             # content_type defaults to application/json
+    fields:
+      name: { type: string, required: true, minLength: 1 }
+      email: { type: email, required: true }
+      roles: { type: "string[]", enum: [admin, member] }
+      address:                      # nested object
+        fields:
+          city: string
+    example: { name: Ana, email: ana@example.com }
+  responses:
+    201:
+      description: The new user
+      fields:
+        id: { type: string, description: Starts with "u_" }
+        name: string
+      example: { id: u_123, name: Ana }
+    409: The email is already in use   # a string is the description
 ---
 
-# POST /api/users
+# Create user
 
-Creates a new user account.
+Creates the account and sends the welcome email unless `notify` is false.
 
-## Headers
-| Name | Value | Required |
-|------|-------|----------|
-| Authorization | Bearer <token> | yes |
+## Business rules
 
-## Body
-```json
-{ "name": "Ana", "email": "ana@example.com" }
-```
-
-## Responses
-### 201 Created
-```json
-{ "id": "u_123", "name": "Ana" }
-```
-
-## Example
-```bash
-curl -X POST https://api.example.com/api/users \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"Ana","email":"ana@example.com"}'
-```
+- Emails are unique per team (409 otherwise).
 ````
+
+- A field is a type name (`string`, `integer`, `number`, `boolean`, `object`, `array`, `string[]`, `date`, `date-time`, `email`, `uuid`, `uri`, `binary`) or an object with `type`, `description`, `required`, `default`, `example`, `enum`, `format`, `minimum`/`maximum`, `minLength`/`maxLength`, `pattern`, nested `fields`, or `items` for arrays. `params`, `query`, `headers` and `cookies` use the same format.
+- For shapes fields cannot express (oneOf, additionalProperties…), use `schema:` with a JSON Schema instead of `fields:`.
+- Optional: `deprecated: true`, `tags: [Users]` (default: the folder), `operation_id`, `summary`, `description`.
+- Document only what the code shows: leave out a field, a status or an example instead of guessing it.
+- `config.json` → `api.base_url` is used in the request examples and as the server in `openapi.json`.
+
+If the project already has an OpenAPI or Swagger spec, `rhyla openapi import <file|url>` (or the `import_openapi` MCP tool) writes these pages from it; importing again only replaces the `api` blocks and keeps the text. `rhyla openapi export` writes `openapi.json` from the pages.
 
 ## Commands
 
 ```bash
 npx rhyla dev     # preview at http://localhost:3333 (re-reads files on every request)
 npx rhyla build   # static site in dist/
+npx rhyla check   # route pages vs. routes in the code (exits with 1 on errors, for CI)
 ```
 
 ## MCP
 
-If the `rhyla` MCP server is connected (`rhyla mcp`), prefer its tools: `search_docs` / `list_pages` to find pages, `read_page` to read, `get_flow` to read flows, `write_page` to create or update.
+If the `rhyla` MCP server is connected (`rhyla mcp`), prefer its tools: `find_routes` to locate the HTTP routes in the code, `import_openapi` to write the route pages from an OpenAPI spec, `check_docs` to compare the route pages with the code, `search_docs` / `list_pages` to find pages, `read_page` to read, `get_flow` to read flows, `write_page` to create, `edit_page` to change part of a page, `delete_page` to remove, `start_preview` to show the site to the user. After changing code, `get_changes` lists what changed since the docs were last synced; call `mark_synced` once the docs match the code again. The `init`, `sync`, `page`, `flow`, `preview` and `clear` prompts (`/rhyla:init`… in Claude Code) run whole workflows.
 
 ## Machine-readable output
 
@@ -143,3 +160,4 @@ The build (and the dev server) also publishes, for AI agents and tools:
 - `/llms-full.txt` — all pages concatenated as Markdown
 - `/<route>.md` — Markdown source of each `.md` page (home is `/index.md`)
 - `/search_index.json` — `[{ route, title, content }]`
+- `/openapi.json` — OpenAPI 3 spec built from the `api` blocks (only when some page has one)
