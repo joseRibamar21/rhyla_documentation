@@ -19,6 +19,8 @@ const MAX_FILE_SIZE = 512 * 1024;
 const MAX_ROUTES = 400;
 
 const HTTP_METHODS = 'get|post|put|patch|delete|head|options|all';
+// POST /login, /auth/signin, /sessions, /oauth/token, /auth…
+const LOGIN_PATH = /\/(log-?in|sign-?in|sessions?|tokens?|authenticate|auth)\/?$/i;
 // Especificações OpenAPI no repositório e bibliotecas que geram uma com o servidor rodando
 const SPEC_FILE = /(^|\/)[^/]*(openapi|swagger)[^/]*\.(json|ya?ml)$/i;
 const SPEC_GENERATORS = /^(@fastify\/swagger|@nestjs\/swagger|swagger-jsdoc|swagger-autogen|express-openapi|express-oas-generator|tsoa|@hono\/zod-openapi|hono-openapi|@asteasolutions\/zod-to-openapi|@elysiajs\/swagger|@ts-rest\/open-api)$/;
@@ -165,7 +167,7 @@ export function findOpenApi(root, files = listProjectFiles(root), deps = depende
  * @param {string} root raiz do projeto
  * @param {string[]} files arquivos do projeto (padrão: listProjectFiles)
  * @param {{ max?: number }} opts max: quantas rotas devolver (o `rhyla check` pede todas)
- * @returns {{ frameworks: string[], count: number, routes: object[], files: string[], unresolved_mounts: object[], openapi_files?: string[], openapi_generators?: string[], truncated?: boolean, note: string }}
+ * @returns {{ frameworks: string[], count: number, routes: object[], files: string[], unresolved_mounts: object[], openapi_files?: string[], openapi_generators?: string[], truncated?: boolean, login_hint?: string, note: string }}
  */
 export function findRoutes(root, files = listProjectFiles(root), { max = MAX_ROUTES } = {}) {
   const deps = dependencies(root);
@@ -269,6 +271,8 @@ export function findRoutes(root, files = listProjectFiles(root), { max = MAX_ROU
     }
   }
   routes.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.method < b.method ? -1 : a.method > b.method ? 1 : 0));
+  // Candidatas a rota de login (o agente confere no código e marca `login` no bloco api)
+  for (const r of routes) if (r.method === 'POST' && LOGIN_PATH.test(r.path)) r.login = true;
 
   const openapi = findOpenApi(root, files, deps);
   const routeFiles = [...new Set(routes.map((r) => r.file))];
@@ -282,6 +286,7 @@ export function findRoutes(root, files = listProjectFiles(root), { max = MAX_ROU
     ...(openapi.files.length ? { openapi_files: openapi.files } : {}),
     ...(openapi.generators.length ? { openapi_generators: openapi.generators } : {}),
     ...(routes.length > max ? { truncated: true } : {}),
+    ...(routes.some((r) => r.login) ? { login_hint: 'Routes with login: true look like the login route. If the code confirms it returns a token, add login: { token: <path of the token in the response> } to its api block: the "Try it" panel then keeps the token for the other routes.' } : {}),
     note: 'Found by pattern matching, without running the code. Prefixes mounted in another file are resolved one level deep; check unresolved_mounts and any path that looks incomplete. Routes built dynamically (loops, config files) are not listed.'
       + (openapi.files.length ? ' openapi_files: the API is already described in an OpenAPI spec; import_openapi turns it into route pages without reading the code.' : '')
       + (openapi.generators.length && !openapi.files.length ? ' openapi_generators: the server builds an OpenAPI spec at runtime; if it is running, import_openapi can read it from its JSON URL (ask the user for it).' : ''),

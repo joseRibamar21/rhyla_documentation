@@ -583,10 +583,13 @@ export function applyImport(bodyPath, imported, { update = true, dryRun = false 
     const page = existing.get(key);
     if (page) {
       const parsed = matter(fs.readFileSync(page.file, 'utf8'));
-      if (JSON.stringify(parsed.data.api) === JSON.stringify(op.data.api)) result.unchanged.push(page.route);
+      // `login` não existe no OpenAPI: a marcação da rota de login fica
+      const { login, ...current } = parsed.data.api;
+      const api = login !== undefined ? { ...op.data.api, login } : op.data.api;
+      if (JSON.stringify(current) === JSON.stringify(op.data.api)) result.unchanged.push(page.route);
       else if (!update) result.skipped.push(page.route);
       else {
-        if (!dryRun) fs.writeFileSync(page.file, stringifyPage(parsed.content, { ...parsed.data, api: op.data.api }), 'utf8');
+        if (!dryRun) fs.writeFileSync(page.file, stringifyPage(parsed.content, { ...parsed.data, api }), 'utf8');
         result.updated.push(page.route);
       }
       continue;

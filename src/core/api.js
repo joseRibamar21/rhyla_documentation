@@ -7,7 +7,8 @@
  *   method: POST
  *   path: /tasks/:id                # ":id" ou "{id}"
  *   auth: bearer                    # bearer | basic | none | { type: apiKey, in: header, name: X-API-Key }
- *   params:  { id: integer }        # path; mapa nome → tipo ou { type, description, required, example… }, ou lista
+ *   login: { token: data.token }    # rota de login: o painel "Testar" guarda o token da resposta
+ *   params:  { id: integer }       # path; mapa nome → tipo ou { type, description, required, example… }, ou lista
  *   query:   { limit: { type: integer, default: 20 } }
  *   headers: { X-Request-Id: string }
  *   body:
@@ -192,6 +193,16 @@ function normalizeAuth(raw, warnings) {
   return null;
 }
 
+// Rota de login: `login: true` (o painel procura o token na resposta) ou `login: { token: data.access_token }`
+function normalizeLogin(raw, warnings) {
+  if (raw === undefined || raw === null || raw === false) return null;
+  if (raw === true) return { token: null };
+  if (typeof raw === 'string' && raw.trim()) return { token: raw.trim() };
+  if (isObject(raw) && (raw.token === undefined || text(raw.token))) return { token: text(raw.token) || null };
+  warnings.push('login must be true or { token: <path in the response, e.g. data.access_token> }');
+  return null;
+}
+
 /**
  * Valida e normaliza o bloco `api:` de uma página.
  * @returns {{ api: object|null, warnings: string[] }} api null quando falta method ou path
@@ -231,6 +242,7 @@ export function normalizeApi(raw) {
       tags: (Array.isArray(raw.tags) ? raw.tags : raw.tags ? [raw.tags] : []).map(String).filter(Boolean),
       deprecated: raw.deprecated === true,
       auth: normalizeAuth(raw.auth, warnings),
+      login: normalizeLogin(raw.login, warnings),
       parameters,
       body: normalizeBody(raw.body, warnings),
       responses: normalizeResponses(raw.responses, warnings),

@@ -20,6 +20,7 @@ import { buildOpenApi, importOpenApi, parseSpec } from '../src/core/openapi.js';
 import { exportSpec, importSpec, openapiExport } from '../src/commands/openapi.js';
 import { checkDocs, createRouteMatcher } from '../src/core/check.js';
 import check, { githubAnnotation } from '../src/commands/check.js';
+import { routeEndpoint, tryData, tryPanelHtml, trySettings } from '../src/core/try.js';
 import matter from 'gray-matter';
 
 function tmpProject() {
@@ -1741,5 +1742,225 @@ module.exports = router;
     assert.match(sync, /no changes, skip step 3/);
     assert.doesNotMatch(sync, /up to date and stop/);
     assert.match(sync, /check_docs[\s\S]*no_api_block[\s\S]*edit_page[\s\S]*Call mark_synced/);
+  });
+});
+
+describe('try it panel', () => {
+  // Projeto com uma rota de login, uma rota com bloco e páginas de rota sem bloco
+  function tryProject(api = { base_url: 'http://127.0.0.1:1' }) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhyla-try-'));
+    init({ cwd: dir, quiet: true, blank: true, title: 'Tasks' });
+    const config = path.join(dir, 'rhyla-docs/config.json');
+    fs.writeFileSync(config, JSON.stringify({ ...JSON.parse(fs.readFileSync(config, 'utf8')), api, preferences: { language: 'Português' } }, null, 2));
+    const body = path.join(dir, 'rhyla-docs/body');
+    fs.mkdirSync(path.join(body, 'tasks'), { recursive: true });
+    fs.writeFileSync(path.join(body, 'tasks/post-create_task.md'), `---
+title: Criar tarefa
+api:
+  method: POST
+  path: /lists/:listId/tasks
+  auth: bearer
+  params: { listId: { type: integer, example: 7 } }
+  query: { notify: { type: boolean, default: true }, mode: { type: string, enum: [fast, safe] } }
+  headers: { X-Trace: string }
+  body:
+    fields: { title: { type: string, required: true }, done: boolean }
+---
+
+# Criar tarefa
+
+Texto com </script> no meio.
+`);
+    fs.writeFileSync(path.join(body, 'tasks/post-login.md'), '---\napi:\n  method: POST\n  path: /login\n  auth: none\n  login: { token: data.token }\n  body: { example: { user: ana } }\n---\n\n# Login\n');
+    fs.writeFileSync(path.join(body, 'tasks/get-old_style.md'), '# GET /tasks/:id\n\nSem bloco.\n');
+    fs.writeFileSync(path.join(body, 'tasks/path-legacy.md'), '# Legacy\n');
+    fs.writeFileSync(path.join(body, 'tasks/notes.md'), '# Notes\n\nCall GET /tasks first.\n');
+    return dir;
+  }
+  const panelData = (html) => {
+    const m = html.match(/<script type="application\/json" id="rh-try-data">([\s\S]*?)<\/script>/);
+    return m ? JSON.parse(m[1]) : null;
+  };
+
+  test('the endpoint comes from the block, a "METHOD /path" heading or the file name', () => {
+    const block = routeEndpoint({ name: 'post-create_task', markdown: '# X', data: { api: { method: 'post', path: '/a/:id' } } });
+    assert.equal(block.source, 'block');
+    assert.equal(block.api.parameters[0].name, 'id');
+    const heading = routeEndpoint({ name: 'whatever', markdown: '# `GET /tasks/{id}`\n', data: {} });
+    assert.deepEqual([heading.source, heading.api.method, heading.api.path], ['heading', 'get', '/tasks/{id}']);
+    const file = routeEndpoint({ name: 'path-update_thing-new', markdown: '# Update thing', data: {} });
+    assert.deepEqual([file.source, file.api.method, file.api.path], ['file', 'patch', null]);
+    // Bloco inválido cai para o H1; .html e páginas comuns não têm painel
+    assert.equal(routeEndpoint({ name: 'x', markdown: '# DELETE /x', data: { api: { method: 'nope' } } }).source, 'heading');
+    assert.equal(routeEndpoint({ name: 'get-page', markdown: null, data: {} }), null);
+    assert.equal(routeEndpoint({ name: 'notes', markdown: '# Notes', data: {} }), null);
+  });
+
+  test('servers, login and example values for the browser', () => {
+    assert.deepEqual(trySettings({ api: { base_url: 'http://localhost:3000/', environments: { Staging: 'https://stg.example.com', Bad: 'ftp://x', Dup: 'http://localhost:3000' } } }), {
+      servers: [{ name: 'http://localhost:3000', url: 'http://localhost:3000' }, { name: 'Staging', url: 'https://stg.example.com' }],
+      dev: true,
+      build: false,
+    });
+    assert.deepEqual(trySettings({ api: { environments: [{ name: 'Prod', url: 'https://api.example.com' }], try_it: true } }).servers, [{ name: 'Prod', url: 'https://api.example.com' }]);
+    assert.deepEqual([trySettings({ api: { try_it: true } }).build, trySettings({ api: { try_it: false } }).dev], [true, false]);
+
+    assert.deepEqual(normalizeApi({ method: 'post', path: '/login', login: true }).api.login, { token: null });
+    assert.deepEqual(normalizeApi({ method: 'post', path: '/login', login: 'access_token' }).api.login, { token: 'access_token' });
+    assert.equal(normalizeApi({ method: 'post', path: '/x' }).api.login, null);
+    assert.match(normalizeApi({ method: 'post', path: '/login', login: 3 }).warnings[0], /login must be true/);
+
+    const { api } = normalizeApi({
+      method: 'post', path: '/lists/:listId', auth: 'bearer',
+      params: { listId: { type: integer(), example: 7 } },
+      query: { mode: { type: 'string', enum: ['fast', 'safe'] }, limit: { type: 'integer', default: 20 } },
+      body: { fields: { title: { type: 'string', required: true }, tags: 'string[]' } },
+    });
+    function integer() { return 'integer'; }
+    const data = tryData({ api, source: 'block' }, { page: 'tasks/x', language: 'Español', servers: [] });
+    assert.equal(data.lang, 'es');
+    assert.equal(data.mode, 'proxy');
+    assert.equal(data.method, 'POST');
+    assert.deepEqual(data.params.map((p) => [p.in, p.name, p.value, p.required]), [['path', 'listId', '7', true], ['query', 'mode', '', false], ['query', 'limit', '20', false]]);
+    assert.deepEqual(data.params[1].enum, ['fast', 'safe']);
+    assert.deepEqual(JSON.parse(data.body.value), { title: 'string', tags: ['string'] });
+    assert.equal(tryData({ api, source: 'block' }, { mode: 'direct' }).proxy, undefined);
+    assert.doesNotMatch(tryPanelHtml({ text: '</script><!--' }), /<\/script><!--/);
+  });
+
+  test('dev shows the panel on route pages only, with the configured servers', async () => {
+    const dir = tryProject();
+    const server = dev({ cwd: dir, port: 0, quiet: true });
+    await new Promise((r) => server.once('listening', r));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    try {
+      const page = async (route) => (await fetch(base + route)).text();
+      const create = panelData(await page('/tasks/post-create_task'));
+      assert.equal(create.method, 'POST');
+      assert.equal(create.path, '/lists/:listId/tasks');
+      assert.equal(create.proxy, '/__rhyla/try');
+      assert.equal(create.lang, 'pt');
+      assert.deepEqual(create.servers, [{ name: 'http://127.0.0.1:1', url: 'http://127.0.0.1:1' }]);
+      assert.deepEqual(create.auth, { type: 'bearer' });
+      assert.match(await page('/tasks/post-create_task'), /<script src="\/scripts\/try-runtime\.js"><\/script>/);
+      assert.deepEqual(panelData(await page('/tasks/post-login')).login, { token: 'data.token' });
+      assert.equal(panelData(await page('/tasks/get-old_style')).source, 'heading');
+      assert.equal(panelData(await page('/tasks/path-legacy')).method, 'PATCH');
+      assert.equal(panelData(await page('/tasks/notes')), null);
+      assert.equal((await fetch(base + '/scripts/try-runtime.js')).status, 200);
+      assert.equal((await fetch(base + '/scripts/try-runtime.css')).status, 200);
+
+      const config = path.join(dir, 'rhyla-docs/config.json');
+      fs.writeFileSync(config, JSON.stringify({ ...JSON.parse(fs.readFileSync(config, 'utf8')), api: { try_it: false } }));
+      assert.equal(panelData(await page('/tasks/post-create_task')), null);
+    } finally {
+      server.close();
+    }
+  });
+
+  test('the dev proxy calls the API, keeps cookie sessions and only goes to allowed hosts', async () => {
+    const http = await import('node:http');
+    // API de teste: devolve o que recebeu; /login abre uma sessão por cookie
+    const api = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (c) => { body += c; });
+      req.on('end', () => {
+        if (req.url === '/login') res.setHeader('Set-Cookie', ['sid=abc123; Path=/; HttpOnly', 'old=1; Max-Age=0']);
+        if (req.url === '/logout') res.setHeader('Set-Cookie', 'sid=; Max-Age=0');
+        res.writeHead(req.url === '/missing' ? 404 : 200, { 'Content-Type': 'application/json', 'X-Api': 'yes' });
+        res.end(JSON.stringify({ method: req.method, url: req.url, auth: req.headers.authorization || null, cookie: req.headers.cookie || null, type: req.headers['content-type'] || null, body }));
+      });
+    });
+    await new Promise((r) => api.listen(0, '127.0.0.1', r));
+    const apiUrl = `http://127.0.0.1:${api.address().port}`;
+    const dir = tryProject({ base_url: 'http://api.invalid' });
+    const server = dev({ cwd: dir, port: 0, quiet: true });
+    await new Promise((r) => server.once('listening', r));
+    const proxy = `http://127.0.0.1:${server.address().port}/__rhyla/try`;
+    const call = async (request, headers = { 'X-Rhyla-Try': '1' }) => {
+      const res = await fetch(proxy, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(request) });
+      return { status: res.status, json: await res.json() };
+    };
+    try {
+      const sent = await call({ method: 'POST', url: `${apiUrl}/tasks?x=1`, headers: [['Authorization', 'Bearer t0k'], ['Content-Type', 'application/json'], ['Host', 'evil'], ['', 'skip']], body: '{"title":"A"}' });
+      assert.equal(sent.status, 200);
+      assert.equal(sent.json.status, 200);
+      assert.equal(typeof sent.json.time, 'number');
+      assert.ok(sent.json.headers.some(([k, v]) => k === 'x-api' && v === 'yes'));
+      assert.deepEqual(JSON.parse(sent.json.body), { method: 'POST', url: '/tasks?x=1', auth: 'Bearer t0k', cookie: null, type: 'application/json', body: '{"title":"A"}' });
+      assert.equal((await call({ method: 'GET', url: `${apiUrl}/missing`, headers: [], body: 'ignored' })).json.status, 404);
+      assert.equal(JSON.parse((await call({ method: 'GET', url: `${apiUrl}/q`, headers: [], body: 'ignored' })).json.body).body, '');
+
+      // Cookie de sessão guardado em memória e mandado nas próximas
+      assert.deepEqual((await call({ method: 'POST', url: `${apiUrl}/login`, headers: [] })).json.cookies, ['sid']);
+      assert.equal(JSON.parse((await call({ method: 'GET', url: `${apiUrl}/me`, headers: [] })).json.body).cookie, 'sid=abc123');
+      const cookies = await fetch(`${proxy}/cookies?origin=${encodeURIComponent(apiUrl)}`, { headers: { 'X-Rhyla-Try': '1' } });
+      assert.deepEqual(await cookies.json(), { cookies: ['sid'] });
+      assert.deepEqual((await call({ method: 'POST', url: `${apiUrl}/logout`, headers: [] })).json.cookies, []);
+      await call({ method: 'POST', url: `${apiUrl}/login`, headers: [] });
+      await fetch(`${proxy}/cookies?origin=${encodeURIComponent(apiUrl)}`, { method: 'DELETE', headers: { 'X-Rhyla-Try': '1' } });
+      assert.equal(JSON.parse((await call({ method: 'GET', url: `${apiUrl}/me`, headers: [] })).json.body).cookie, null);
+
+      // Só a própria página do dev, só hosts locais ou configurados
+      assert.equal((await call({ method: 'GET', url: `${apiUrl}/x` }, {})).status, 403);
+      const external = await call({ method: 'GET', url: 'https://example.com/x' });
+      assert.equal(external.status, 403);
+      assert.equal(external.json.code, 'not_configured');
+      assert.match(external.json.error, /api": \{ "base_url": "https:\/\/example\.com" \}/);
+      assert.equal((await call({ method: 'GET', url: 'http://api.invalid/x' })).json.code, 'unreachable');
+      assert.equal((await call({ method: 'GET', url: 'http://127.0.0.1:1/x' })).json.code, 'unreachable');
+      assert.equal((await call({ method: 'BREW', url: `${apiUrl}/x` })).status, 400);
+      assert.equal((await call({ method: 'GET', url: 'file:///etc/passwd' })).status, 400);
+      assert.equal((await call({ method: 'GET', url: 'not a url' })).status, 400);
+      const rebound = await new Promise((resolve) => {
+        const req = http.request(proxy, { method: 'POST', headers: { Host: 'attacker.example', 'Content-Type': 'application/json', 'X-Rhyla-Try': '1' } }, (res) => resolve(res.statusCode));
+        req.end(JSON.stringify({ method: 'GET', url: `${apiUrl}/x` }));
+      });
+      assert.equal(rebound, 403);
+    } finally {
+      server.close();
+      api.close();
+    }
+  });
+
+  test('build includes the panel only with api.try_it, calling the API directly', () => {
+    const dir = tryProject();
+    build({ cwd: dir, quiet: true });
+    const html = (rel) => fs.readFileSync(path.join(dir, 'dist', rel), 'utf8');
+    assert.equal(panelData(html('tasks/post-create_task.html')), null);
+    assert.ok(fs.existsSync(path.join(dir, 'dist/scripts/try-runtime.js')));
+
+    const config = path.join(dir, 'rhyla-docs/config.json');
+    fs.writeFileSync(config, JSON.stringify({ ...JSON.parse(fs.readFileSync(config, 'utf8')), api: { base_url: 'https://api.example.com', try_it: true } }));
+    build({ cwd: dir, quiet: true });
+    const data = panelData(html('tasks/post-create_task.html'));
+    assert.equal(data.mode, 'direct');
+    assert.equal(data.proxy, undefined);
+    assert.deepEqual(data.servers, [{ name: 'https://api.example.com', url: 'https://api.example.com' }]);
+    assert.equal(panelData(html('tasks/notes.html')), null);
+    assert.ok(fs.existsSync(path.join(dir, 'dist/scripts/try-runtime.css')));
+  });
+
+  test('find_routes flags login candidates and import keeps the login mark', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rhyla-routes-'));
+    fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'x', dependencies: { express: '4' } }));
+    fs.writeFileSync(path.join(root, 'app.js'), "const app = require('express')();\napp.post('/auth/login', h);\napp.get('/auth/me', h);\napp.post('/oauth/token', h);\napp.post('/users', h);\n");
+    const found = findRoutes(root);
+    assert.deepEqual(found.routes.filter((r) => r.login).map((r) => r.path), ['/auth/login', '/oauth/token']);
+    assert.match(found.login_hint, /login: \{ token:/);
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhyla-try-'));
+    init({ cwd: dir, quiet: true, blank: true });
+    const spec = (description) => JSON.stringify({ openapi: '3.0.3', info: { title: 'A', version: '1' }, paths: { '/login': { post: { summary: 'Log in', responses: { 200: { description } } } } } });
+    fs.writeFileSync(path.join(dir, 'spec.json'), spec('The token'));
+    const first = await importSpec({ cwd: dir, source: 'spec.json' });
+    const file = path.join(dir, 'rhyla-docs/body', first.created[0].slice(1) + '.md');
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace('  method: POST\n', '  method: POST\n  login:\n    token: token\n'));
+    assert.deepEqual((await importSpec({ cwd: dir, source: 'spec.json' })).unchanged, first.created);
+    fs.writeFileSync(path.join(dir, 'spec.json'), spec('The session token'));
+    assert.deepEqual((await importSpec({ cwd: dir, source: 'spec.json' })).updated, first.created);
+    const updated = matter(fs.readFileSync(file, 'utf8')).data.api;
+    assert.deepEqual(updated.login, { token: 'token' });
+    assert.equal(updated.responses[200], 'The session token');
   });
 });

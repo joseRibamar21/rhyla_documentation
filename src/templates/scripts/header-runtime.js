@@ -198,6 +198,9 @@
   function executeScripts(container) {
     const nodes = Array.from(container.querySelectorAll('script'));
     for (const old of nodes) {
+      // Blocos de dados (application/json…) não são código: ficam como estão
+      const type = (old.getAttribute('type') || '').trim().toLowerCase();
+      if (type && !/^(text\/javascript|application\/javascript|module)$/.test(type)) continue;
       const s = document.createElement('script');
       if (old.src) {
         // Recarrega scripts externos
