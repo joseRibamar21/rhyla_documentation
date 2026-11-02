@@ -46,6 +46,7 @@ program
 program
   .command('build')
   .description('Generate static HTML documentation in dist/ (plus llms.txt and .md sources)')
+  .option('-b, --base <base>', 'Base path the site is served under, e.g. /docs (default: "base" in rhyla-docs/config.json)')
   .action(run(build));
 
 program

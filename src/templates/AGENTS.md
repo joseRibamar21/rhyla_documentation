@@ -145,13 +145,15 @@ If the project already has an OpenAPI / Swagger spec or a Postman collection, `r
 
 ```bash
 npx rhyla dev     # preview at http://localhost:3333 (re-reads files on every request)
-npx rhyla build   # static site in dist/
+npx rhyla build   # static site in dist/ (published, or served by the API at /docs with rhyla/serve)
 npx rhyla check   # route pages vs. routes in the code (exits with 1 on errors, for CI)
 ```
 
+If the project has a `dist/`, build again after changing pages, so what gets published (or served at /docs) has them.
+
 ## MCP
 
-If the `rhyla` MCP server is connected (`rhyla mcp`), prefer its tools: `find_routes` to locate the HTTP routes in the code, `import_openapi` to write the route pages from an OpenAPI spec, `check_docs` to compare the route pages with the code, `search_docs` / `list_pages` to find pages, `read_page` to read, `get_flow` to read flows, `write_page` to create, `edit_page` to change part of a page, `delete_page` to remove, `start_preview` to show the site to the user. After changing code, `get_changes` lists what changed since the docs were last synced; call `mark_synced` once the docs match the code again. The `init`, `sync`, `page`, `flow`, `preview` and `clear` prompts (`/rhyla:init`… in Claude Code) run whole workflows.
+If the `rhyla` MCP server is connected (`rhyla mcp`), prefer its tools: `find_routes` to locate the HTTP routes in the code, `import_openapi` to write the route pages from an OpenAPI spec or a Postman collection, `check_docs` to compare the route pages with the code, `search_docs` / `list_pages` to find pages, `read_page` to read, `get_flow` to read flows, `write_page` to create, `edit_page` to change part of a page, `delete_page` to remove, `start_preview` to show the site to the user. After changing code, `get_changes` lists what changed since the docs were last synced; call `mark_synced` once the docs match the code again, and `build_docs` when the project has a `dist/`. The `init`, `sync`, `page`, `flow`, `preview` and `clear` prompts (`/rhyla:init`… in Claude Code) run whole workflows.
 
 ## Machine-readable output
 

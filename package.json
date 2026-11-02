@@ -44,7 +44,12 @@
       "types": "./index.d.ts"
     },
     "./client": "./src/client/index.js",
-    "./express": "./src/client/index.js"
+    "./express": "./src/client/index.js",
+    "./serve": {
+      "types": "./src/serve/index.d.ts",
+      "default": "./src/serve/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "dependencies": {
     "commander": "^11.1.0",

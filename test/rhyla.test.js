@@ -19,6 +19,8 @@ import { normalizeApi, withApiReference } from '../src/core/api.js';
 import { buildOpenApi, importOpenApi, parseSpec } from '../src/core/openapi.js';
 import { exportSpec, importSpec, initWithImport, openapiExport } from '../src/commands/openapi.js';
 import { detectFormat, importDocument, parseSource } from '../src/core/import.js';
+import { distStatus, readManifest, staleMessage } from '../src/core/dist.js';
+import { fastifyRhyla, rhyla, rhylaFetch } from '../src/serve/index.js';
 import { checkDocs, createRouteMatcher } from '../src/core/check.js';
 import check, { githubAnnotation } from '../src/commands/check.js';
 import { routeEndpoint, tryData, tryPanelHtml, trySettings } from '../src/core/try.js';
@@ -257,7 +259,7 @@ describe('mcp server', () => {
     const names = (await server.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' })).result.tools.map((t) => t.name);
     assert.deepEqual(names, [
       'init_docs', 'setup_wizard', 'set_plan', 'set_site', 'find_routes', 'check_docs', 'import_openapi', 'save_preferences', 'ask_preferences', 'list_pages', 'read_page', 'search_docs', 'get_flow',
-      'get_conventions', 'write_page', 'edit_page', 'delete_page', 'clear_docs', 'get_changes', 'mark_synced', 'start_preview', 'stop_preview',
+      'get_conventions', 'write_page', 'edit_page', 'delete_page', 'clear_docs', 'get_changes', 'mark_synced', 'build_docs', 'start_preview', 'stop_preview',
     ]);
     const ro = createMcpServer({ cwd: dir, readOnly: true });
     const roNames = (await ro.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' })).result.tools.map((t) => t.name);
@@ -2191,5 +2193,173 @@ describe('import: postman collections and the wizard', () => {
     assert.equal(res.questions[0].id, 'spec');
     assert.deepEqual(res.questions[0].options, ['openapi.yaml', 'docs/tasks.postman_collection.json', 'No, read the code']);
     assert.match(res.then, /call import_openapi/);
+  });
+});
+
+describe('serving the docs inside an API (rhyla/serve)', () => {
+  const listen = (server) => new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(`http://127.0.0.1:${server.address().port}`)));
+  function builtProject(base = '/docs') {
+    const dir = tmpProject();
+    build({ cwd: dir, quiet: true, base });
+    return dir;
+  }
+
+  test('build --base writes the manifest, and the status says when dist/ is behind', () => {
+    const dir = builtProject('/docs');
+    const manifest = readManifest(path.join(dir, 'dist'));
+    assert.equal(manifest.base, '/docs/');
+    assert.equal(manifest.generator, 'rhyla');
+    assert.equal(typeof manifest.sources.files, 'number');
+    assert.match(fs.readFileSync(path.join(dir, 'dist/index.html'), 'utf8'), /href="\/docs\/styles\/global\.css"/);
+    assert.deepEqual(pick(distStatus(dir)), { built: true, base: '/docs/', stale: false, changed: 0 });
+
+    const page = path.join(dir, 'rhyla-docs/body/zeta/b-second.md');
+    const later = new Date(Date.now() + 5000);
+    fs.utimesSync(page, later, later);
+    const stale = distStatus(dir);
+    assert.deepEqual(pick(stale), { built: true, base: '/docs/', stale: true, changed: 1 });
+    assert.match(staleMessage(stale, '/docs/'), /1 file in rhyla-docs\/ changed[\s\S]*"base": "\/docs"[\s\S]*--base \/docs/);
+    // config.json já com o base certo: basta o build
+    assert.match(staleMessage(stale, '/docs/', undefined, '/docs'), /Run "npx rhyla build"\.$/);
+    // sync.json (mark_synced) não muda o site
+    build({ cwd: dir, quiet: true, base: '/docs' });
+    fs.writeFileSync(path.join(dir, 'rhyla-docs/sync.json'), '{}');
+    assert.equal(distStatus(dir).stale, false);
+    // Página apagada: o número de arquivos mudou
+    fs.rmSync(page);
+    assert.deepEqual(pick(distStatus(dir)), { built: true, base: '/docs/', stale: true, changed: -1 });
+    assert.deepEqual(pick(distStatus(tmpProject())), { built: false, base: null, stale: false, changed: 0 });
+    // Build de outra versão do Rhyla: os scripts do dist/ são os antigos
+    build({ cwd: dir, quiet: true, base: '/docs' });
+    const old = distStatus(dir, { version: '9.9.9' });
+    assert.equal(old.builtWith, readManifest(path.join(dir, 'dist')).version);
+    assert.match(staleMessage(old, '/docs/', '9.9.9'), /built with Rhyla [\d.]+ and this is 9\.9\.9/);
+    assert.equal(distStatus(dir, { version: old.builtWith }).builtWith, undefined);
+    function pick({ built, base, stale, changed }) { return { built, base, stale, changed }; }
+  });
+
+  test('Express: app.use("/docs", rhyla()) serves dist/ with clean URLs, cache headers and a 404 page', async () => {
+    const dir = builtProject('/docs');
+    const express = (await import('express')).default;
+    const app = express();
+    app.get('/api/health', (req, res) => res.json({ ok: true }));
+    app.use('/docs', rhyla({ cwd: dir, quiet: true }));
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise((r) => server.once('listening', r));
+    const base = `http://127.0.0.1:${server.address().port}`;
+    try {
+      for (const [url, status, type] of [
+        ['/docs', 200, /text\/html/], ['/docs/', 200, /text\/html/], ['/docs/zeta/b-second', 200, /text\/html/],
+        ['/docs/zeta/b-second.html', 200, /text\/html/], ['/docs/zeta/b-second.md', 200, /text\/markdown/],
+        ['/docs/styles/global.css', 200, /text\/css/], ['/docs/llms.txt', 200, /text\/plain/], ['/docs/nope', 404, /text\/html/],
+      ]) {
+        const res = await fetch(base + url);
+        assert.equal(res.status, status, url);
+        assert.match(res.headers.get('content-type'), type, url);
+      }
+      const home = await fetch(`${base}/docs/`);
+      assert.equal(home.headers.get('cache-control'), 'no-cache');
+      assert.equal((await fetch(`${base}/docs/`, { headers: { 'If-None-Match': home.headers.get('etag') } })).status, 304);
+      assert.equal((await fetch(`${base}/docs/styles/global.css`)).headers.get('cache-control'), 'public, max-age=3600');
+      assert.equal((await fetch(`${base}/docs/`, { method: 'HEAD' })).status, 200);
+      // Fora de dist/ e métodos de escrita ficam com a API
+      assert.equal((await fetch(`${base}/docs/%2e%2e/package.json`)).status, 404);
+      assert.equal((await fetch(`${base}/docs/`, { method: 'POST' })).status, 404);
+      assert.deepEqual(await (await fetch(`${base}/api/health`)).json(), { ok: true });
+    } finally {
+      server.close();
+    }
+  });
+
+  test('a missing build, another base path or old pages are explained, once', async () => {
+    const http = await import('node:http');
+    const messages = [];
+    const serve = async (dir, mount) => {
+      const handler = rhyla({ cwd: dir, base: mount, log: (m) => messages.push(m) });
+      const server = http.createServer((req, res) => handler(req, res));
+      const base = await listen(server);
+      try {
+        const first = await fetch(`${base}/`);
+        await fetch(`${base}/`);
+        return { status: first.status, text: await first.text() };
+      } finally {
+        server.close();
+      }
+    };
+    const missing = await serve(tmpProject(), '/docs');
+    assert.equal(missing.status, 503);
+    assert.match(missing.text, /npx rhyla build --base \/docs/);
+
+    const other = await serve(builtProject('/'), '/docs');
+    assert.equal(other.status, 503);
+    assert.match(other.text, /built for &quot;\/&quot;, but it is served at &quot;\/docs\/&quot;/);
+
+    const dir = builtProject('/docs');
+    const later = new Date(Date.now() + 5000);
+    fs.utimesSync(path.join(dir, 'rhyla-docs/body/zeta/b-second.md'), later, later);
+    assert.equal((await serve(dir, '/docs')).status, 200);
+    // Um aviso por problema, não um por requisição
+    assert.equal(messages.length, 3);
+    assert.match(messages[2], /dist\/ is out of date: 1 file/);
+  });
+
+  test('Fastify plugin and the fetch handler serve the same site', async () => {
+    const http = await import('node:http');
+    const dir = builtProject('/docs');
+    // Fastify mínimo: register com prefixo, rotas GET e reply.hijack()
+    const routes = [];
+    const fastify = { prefix: '/docs', get: (route, handler) => routes.push([route, handler]) };
+    fastifyRhyla(fastify, { cwd: dir, quiet: true }, () => {});
+    assert.deepEqual(routes.map(([r]) => r), ['/', '/*']);
+    const server = http.createServer((req, res) => {
+      let hijacked = false;
+      routes[1][1]({ raw: req }, { raw: res, hijack: () => { hijacked = true; } });
+      assert.ok(hijacked);
+    });
+    const base = await listen(server);
+    try {
+      const page = await fetch(`${base}/docs/zeta/b-second`);
+      assert.equal(page.status, 200);
+      assert.match(await page.text(), /Second/);
+      assert.equal((await fetch(`${base}/docs/missing`)).status, 404);
+    } finally {
+      server.close();
+    }
+
+    const docs = rhylaFetch({ cwd: dir, quiet: true });
+    const res = await docs(new Request('http://api.test/docs/zeta/b-second'));
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /text\/html/);
+    assert.match(await res.text(), /Second/);
+    assert.equal((await docs(new Request('http://api.test/docs'))).status, 200);
+    assert.equal((await docs(new Request('http://api.test/docs/nope'))).status, 404);
+    assert.equal((await docs(new Request('http://api.test/docs/', { method: 'POST' }))).status, 405);
+    const etag = (await docs(new Request('http://api.test/docs/'))).headers.get('etag');
+    assert.equal((await docs(new Request('http://api.test/docs/', { headers: { 'If-None-Match': etag } }))).status, 304);
+  });
+
+  test('the agent builds dist/ after a sync, and mark_synced warns when it is behind', async () => {
+    const dir = tmpProject();
+    const srv = createMcpServer({ cwd: dir });
+    const call = async (name, args = {}) => JSON.parse((await srv.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } })).result.content[0].text);
+    const prompt = async (name) => (await srv.handle({ jsonrpc: '2.0', id: 1, method: 'prompts/get', params: { name, arguments: {} } })).result.messages[0].content.text;
+    // Sem dist/: o sync só lembra do build
+    assert.match(await prompt('sync'), /no dist\/ yet[\s\S]*Remind the user that `npx rhyla build`/);
+    assert.match(await prompt('init'), /`npx rhyla build` generates the static site in dist\//);
+
+    const built = await call('build_docs');
+    assert.deepEqual([built.dist, built.base], ['dist/', '/']);
+    assert.ok(fs.existsSync(path.join(dir, 'dist/rhyla.json')));
+    assert.match(await prompt('sync'), /Call build_docs[\s\S]*Call mark_synced/);
+    assert.equal((await call('mark_synced')).dist_stale, undefined);
+    await new Promise((r) => setTimeout(r, 20));
+    await call('write_page', { path: 'zeta/new', content: '# New' });
+    const synced = await call('mark_synced');
+    assert.equal(synced.dist_stale, true);
+    assert.match(synced.next, /dist\/ is out of date[\s\S]*Call build_docs/);
+    // Sem escrita, sem build
+    const ro = createMcpServer({ cwd: dir, readOnly: true });
+    const names = (await ro.handle({ jsonrpc: '2.0', id: 1, method: 'tools/list' })).result.tools.map((t) => t.name);
+    assert.ok(!names.includes('build_docs'));
   });
 });

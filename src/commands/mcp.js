@@ -17,6 +17,8 @@ import { LOGO_MAX_BYTES, createSetup, formatImported, formatSiteTodo, writeLogo 
 import init, { SAMPLE_PAGES, TEMPLATES_DIR, blankHome } from './init.js';
 import { importSpec } from './openapi.js';
 import dev from './dev.js';
+import build from './build.js';
+import { distStatus, staleMessage } from '../core/dist.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const { version } = createRequire(import.meta.url)('../../package.json');
@@ -232,10 +234,10 @@ ${existing.length ? `   ${existing.join('\n   ')}\n` : ''}
 
 9. Call mark_synced: the wizard shows that the docs are ready, and ${cmd('sync')} later only looks at what changed.
 
-10. Tell the user the docs are ready at the preview URL (the wizard links to them too). Summarize the pages and list anything you could not confirm from the code, plus the check_docs warnings you left.`;
+10. Tell the user the docs are ready at the preview URL (the wizard links to them too). Summarize the pages and list anything you could not confirm from the code, plus the check_docs warnings you left. Tell them that \`npx rhyla build\` generates the static site in dist/, to publish it or to serve it inside the API (rhyla/serve), and that ${cmd('sync')} keeps it up to date.`;
   },
 
-  sync() {
+  sync({ built = false } = {}) {
     return `Bring the Rhyla documentation of this project up to date with the code, then show it to the user.
 
 1. Call get_changes. It lists the files changed since the last sync, including uncommitted ones.
@@ -255,9 +257,11 @@ ${existing.length ? `   ${existing.join('\n   ')}\n` : ''}
 4. Call check_docs and fix its errors (routes without a page, pages of routes that are no longer in the code, invalid api blocks).
    Then add the api block to the route pages it warns have none (no_api_block): read the route in the code (find_routes gives the file and line) and add the block to the frontmatter with edit_page, in the format of get_conventions. Take out of the text the parameter tables, field lists and request examples the block now generates; keep the rest of the text.
 
-5. Call mark_synced.
+5. ${built ? 'Call build_docs: this project has a dist/ (published, or served by the API at /docs with rhyla/serve), and it must have the new pages.' : 'The project has no dist/ yet: nothing to build.'}
 
-6. If nothing had to change, tell the user the docs are up to date. Otherwise: ${SHOW} Then list the pages you updated, created and deleted, and anything you could not confirm from the code.`;
+6. Call mark_synced.
+
+7. If nothing had to change, tell the user the docs are up to date. Otherwise: ${SHOW} Then list the pages you updated, created and deleted, and anything you could not confirm from the code.${built ? '' : ' Remind the user that `npx rhyla build` generates the static site in dist/, to publish it or to serve it inside the API (rhyla/serve).'}`;
   },
 
   clear() {
@@ -1116,7 +1120,27 @@ export function createMcpServer(opts = {}) {
         const data = { commit: git(['rev-parse', 'HEAD']), synced_at: new Date().toISOString() };
         fs.writeFileSync(syncFile(), JSON.stringify(data, null, 2) + '\n', 'utf8');
         setup.finish();
-        return { data: { ...data, file: `${DOCS_DIR}/${SYNC_FILE}` } };
+        const dist = distStatus(cwd);
+        return {
+          data: {
+            ...data,
+            file: `${DOCS_DIR}/${SYNC_FILE}`,
+            ...(dist.built && dist.stale ? { dist_stale: true, next: `${staleMessage(dist, dist.base, undefined, loadConfig(rhylaPath).base)} Call build_docs.` } : {}),
+          },
+        };
+      },
+    },
+    {
+      name: 'build_docs',
+      title: 'Build the static site',
+      description: 'Run `rhyla build`: the static site in dist/ (what gets published, and what the API serves at /docs with rhyla/serve), with openapi.json and llms.txt, under the "base" of config.json. Call it after sync when the project has a dist/.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+      writes: true,
+      run() {
+        requireProject();
+        const result = build({ cwd, quiet: true });
+        return { data: { dist: 'dist/', base: result.base, pages: result.pages, operations: result.operations } };
       },
     },
     {
@@ -1171,7 +1195,7 @@ export function createMcpServer(opts = {}) {
       description: 'Update, create and delete pages for the code that changed since the last sync, then open the preview.',
       arguments: [],
       writes: true,
-      text: PROMPT_TEXT.sync,
+      text: () => PROMPT_TEXT.sync({ built: distStatus(cwd).built }),
     },
     {
       name: 'clear',

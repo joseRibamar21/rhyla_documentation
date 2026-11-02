@@ -2,6 +2,7 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
 import { generateSidebarHTML } from "../utils/sidebar.js";
 import { DOCS_DIR, loadConfig } from "../core/config.js";
 import { createMarkdown, renderFile } from "../core/content.js";
@@ -16,8 +17,10 @@ import { registerSetupRoutes } from "./dev-setup.js";
 import { registerTryRoutes } from "./dev-try.js";
 import { routeEndpoint, tryData, tryPanelHtml, trySettings } from "../core/try.js";
 import { createSetup } from "../core/setup.js";
+import { distStatus, staleMessage } from "../core/dist.js";
 
 const __filename = fileURLToPath(import.meta.url);
+const { version: RHYLA_VERSION } = createRequire(import.meta.url)("../../package.json");
 const __dirname = path.dirname(__filename);
 
 // Script que corrige caminhos CSS em todas as páginas (dev sempre roda na raiz "/")
@@ -257,5 +260,8 @@ export default function dev(opts = {}) {
   return app.listen(port, host, () => {
     log(`🚀 Dev server running at http://${host === "0.0.0.0" ? "localhost" : host}:${port}`);
     log(`🤖 For AI agents: http://localhost:${port}/llms.txt`);
+    // O dist/ (publicado ou servido pela API com rhyla/serve) ficou para trás?
+    const dist = distStatus(root, { version: RHYLA_VERSION });
+    if (dist.built && (dist.stale || dist.builtWith)) log(`ℹ️  ${staleMessage(dist, dist.base, RHYLA_VERSION, loadConfig(rhylaPath).base)}`);
   });
 }
