@@ -11,9 +11,9 @@ import { listPages, loadPage, resolvePageFile } from '../core/pages.js';
 import { buildFlowGraph } from '../core/flows.js';
 import { apiRenderOptions, normalizeApi } from '../core/api.js';
 import { AUDIENCES, EXAMPLES, LANGUAGES, MODE_KEYS, defaultPreferences, formatPreferences, matchLanguage, readPreferences, savePreferences as storePreferences } from '../core/preferences.js';
-import { findRoutes } from '../core/routes.js';
+import { findOpenApi, findRoutes } from '../core/routes.js';
 import { checkDocs } from '../core/check.js';
-import { LOGO_MAX_BYTES, createSetup, formatSiteTodo, writeLogo } from '../core/setup.js';
+import { LOGO_MAX_BYTES, createSetup, formatImported, formatSiteTodo, writeLogo } from '../core/setup.js';
 import init, { SAMPLE_PAGES, TEMPLATES_DIR, blankHome } from './init.js';
 import { importSpec } from './openapi.js';
 import dev from './dev.js';
@@ -45,7 +45,7 @@ const INSTRUCTIONS = `Rhyla documentation for this project lives in ${DOCS_DIR}/
 If there is no ${DOCS_DIR}/ yet, call init_docs first.
 Use search_docs or list_pages to find pages and read_page to read one. Flows (type: flow) connect pages into processes; read them with get_flow.
 Before writing, call get_conventions once (frontmatter, naming, API page format; topic "flows" for flow pages). Create pages with write_page, change them with edit_page, remove them with delete_page.
-Call start_preview to serve the site locally and give the user its URL. find_routes lists the HTTP routes in the code without reading every file; if the project has an OpenAPI spec, import_openapi writes the route pages from it.
+Call start_preview to serve the site locally and give the user its URL. find_routes lists the HTTP routes in the code without reading every file; if the project has an OpenAPI spec or a Postman collection, import_openapi writes the route pages from it.
 Route pages describe their endpoint in an api block in the frontmatter (see get_conventions): Rhyla renders the parameters, body, responses and request examples from it, and publishes openapi.json. check_docs compares the route pages with the routes in the code.
 To document a whole project from its source code, follow the init prompt; after code changes, the sync prompt (get_changes, then mark_synced).`;
 
@@ -112,7 +112,10 @@ function questionDefaults(suggested) {
   };
 }
 
-function preferenceForm(defaults, { hasApi }) {
+// Opção "não importar" das especificações encontradas no projeto
+const NO_SPEC = 'No, read the code';
+
+function preferenceForm(defaults, { hasApi, specs = [] }) {
   const properties = {
     language: { type: 'string', title: 'Language', description: 'Language the docs are written in.', enum: [...LANGUAGES.map(([name]) => name), OTHER_LANGUAGE] },
     mode: { type: 'string', title: 'Mode', description: 'How much of the project the docs cover, and how much time and tokens they cost.', enum: MODE_KEYS, enumNames: MODE_KEYS.map((key) => MODE_TITLES[key]), default: defaults.mode },
@@ -123,6 +126,9 @@ function preferenceForm(defaults, { hasApi }) {
     for (const [key, title] of EXAMPLES) {
       properties[`example_${key}`] = { type: 'boolean', title: `Examples: ${title}`, description: 'Request examples on the API pages.', default: defaults.examples.includes(key) };
     }
+  }
+  if (specs.length) {
+    properties.spec = { type: 'string', title: 'Import a spec', description: 'Write the route pages from an OpenAPI / Swagger spec or a Postman collection of the project, without reading the route code.', enum: [...specs, NO_SPEC], default: specs[0] };
   }
   properties.notes = { type: 'string', title: 'Notes', description: 'Optional: another language, tone, what to leave out…' };
   if (defaults.language) properties.language.default = defaults.language;
@@ -142,7 +148,7 @@ function preferencesFromForm(content, { hasApi }) {
   };
 }
 
-function preferenceQuestions(defaults, { hasApi }) {
+function preferenceQuestions(defaults, { hasApi, specs = [] }) {
   const questions = [
     { id: 'language', question: 'Which language should the docs be written in?', multiple: false, options: LANGUAGES.map(([name]) => name), suggested: defaults.language },
     {
@@ -160,6 +166,9 @@ function preferenceQuestions(defaults, { hasApi }) {
   ];
   if (hasApi) {
     questions.push({ id: 'examples', question: 'Which request examples should the API pages have?', multiple: true, options: EXAMPLES.map(([value, label]) => ({ value, label })), suggested: defaults.examples });
+  }
+  if (specs.length) {
+    questions.unshift({ id: 'spec', question: 'The project has an API spec. Write the route pages from it (without reading the route code)?', multiple: false, options: [...specs, NO_SPEC], suggested: specs[0] });
   }
   return questions;
 }
@@ -203,19 +212,19 @@ const PROMPT_TEXT = {
 
     return `Generate the documentation site for this project with Rhyla, then show it to the user.
 
-1. Open the setup wizard: call setup_wizard${language ? ` with language: "${language}"` : ''}. It creates ${DOCS_DIR}/ if needed, starts the local site and opens the wizard in the user's browser, where they choose the language, the mode (Essential, Balanced or Complete) and whether to include flowcharts. Tell the user in one line that the wizard is open, with its URL.
+1. Open the setup wizard: call setup_wizard${language ? ` with language: "${language}"` : ''}. It creates ${DOCS_DIR}/ if needed, starts the local site and opens the wizard in the user's browser. Its first step lets the user import an OpenAPI / Swagger spec or a Postman collection (a file of the project, an upload or a URL); then they choose the language, the mode (Essential, Balanced or Complete) and whether to include flowcharts. Tell the user in one line that the wizard is open, with its URL.
    If the wizard cannot be used (no browser, or the user prefers to answer here), call ask_preferences instead and follow its result.
 
-2. While the user answers, look around: call find_routes and read the README and the package manifest. Do not write pages yet.
-   If find_routes reports openapi_files, the API is already described: in step 7, write the route pages with import_openapi instead of by hand (no code reading, no tokens), then add only what the spec does not say.
+2. While the user answers, look around: call find_routes and read the README and the package manifest. Do not write pages yet, and do not import a spec yourself: the user picks one in the wizard (or in ask_preferences).
 ${existing.length ? `   ${existing.join('\n   ')}\n` : ''}
 3. Call setup_wizard with wait: true, again while it returns status "waiting" (each call waits up to 90 seconds). When it returns "saved", follow the preferences it returns, above all the instructions of the chosen mode: they say what to read and what to write. If it also returns site_todo, do it (the user left the title or the logo to you).
+   If it returns imported, the route pages are already written from the user's spec, with the api block filled in: do not write route pages by hand and do not read the route code to fill their blocks. Add to them only what the spec does not say and the mode asks for (what each route is for, rules, errors), with edit_page, and write the other pages of the mode. Include the imported pages in set_plan.
 
 4. Call get_conventions once (and with topic "flows" if the user wants flowcharts).
 
 5. Read what the mode asks for, and nothing more. Document only what the code shows; when something is unclear, say so on the page instead of guessing.
 
-6. Plan the pages and call set_plan with them (path and title), so the wizard shows the progress. With an OpenAPI spec, import_openapi with dry_run: true lists the route pages it will create; include them in the plan.
+6. Plan the pages and call set_plan with them (path and title), so the wizard shows the progress.
 
 7. Write the pages with write_page, several per call (pages: [...]), in the chosen language and for the chosen audience. Give each page a title and a description, use order so the sidebar reads in a sensible sequence, and link pages to each other with root-relative links (/api/users/get-list).
 
@@ -544,7 +553,15 @@ export function createMcpServer(opts = {}) {
             return { data: { status: 'waiting', url: `${preview ? preview.url : ''}/__rhyla/setup`, next: 'The user has not finished the wizard yet. Call setup_wizard with wait: true again.' } };
           }
           const siteTodo = formatSiteTodo(result.siteTodo);
-          return { data: { status: 'saved', preferences: formatPreferences(result.preferences), ...(siteTodo ? { site_todo: siteTodo } : {}) } };
+          const imported = formatImported(result.imported);
+          return {
+            data: {
+              status: 'saved',
+              preferences: formatPreferences(result.preferences),
+              ...(siteTodo ? { site_todo: siteTodo } : {}),
+              ...(imported ? { imported: { ...imported, next: 'These route pages were written from the spec the user chose. Do not rewrite them or read the route code to fill their api blocks; add only the text the spec does not have, with edit_page.' } } : {}),
+            },
+          };
         }
         if (!fs.existsSync(bodyPath)) {
           const pkg = packageInfo(cwd);
@@ -647,11 +664,11 @@ export function createMcpServer(opts = {}) {
     {
       name: 'import_openapi',
       title: 'Import an OpenAPI spec',
-      description: 'Write one route page per operation of an OpenAPI 3 or Swagger 2 spec (JSON or YAML file in the project, or an http(s) URL), with the api block filled in from the spec, without reading the code. Pages that already document the same method and path only get their api block replaced; their text stays.',
+      description: 'Write one route page per operation of an OpenAPI 3 / Swagger 2 spec or a Postman collection (v2.x) (JSON or YAML file in the project, or an http(s) URL), with the api block filled in from it, without reading the code. Pages that already document the same method and path only get their api block replaced; their text stays. Secrets in Postman collections (tokens, passwords, keys) are left out.',
       inputSchema: {
         type: 'object',
         properties: {
-          source: { type: 'string', description: 'Project path ("openapi.yaml") or URL ("http://localhost:3000/docs/json").' },
+          source: { type: 'string', description: 'Project path ("openapi.yaml", "api.postman_collection.json") or URL ("http://localhost:3000/docs/json").' },
           update: { type: 'boolean', description: 'false: leave pages that already document an operation untouched (default true).' },
           dry_run: { type: 'boolean', description: 'true: only report the pages it would create or update.' },
         },
@@ -728,11 +745,13 @@ export function createMcpServer(opts = {}) {
       writes: true,
       async run(args) {
         requireProject();
-        const scope = { hasApi: args.has_api !== false };
+        const found = findOpenApi(cwd);
+        // Até três especificações: as perguntas de múltipla escolha têm no máximo quatro opções
+        const scope = { hasApi: args.has_api !== false, specs: [...found.files, ...found.postman].slice(0, 3) };
         // Sem sugestão, parte do que já está salvo
         const defaults = questionDefaults({ ...readPreferences(rhylaPath), ...args });
         const ask = (note) => ({
-          data: { status: 'ask', note, questions: preferenceQuestions(defaults, scope), then: 'Call save_preferences with the answers.' },
+          data: { status: 'ask', note, questions: preferenceQuestions(defaults, scope), then: `Call save_preferences with the answers.${scope.specs.length ? ' If the user chose a spec, call import_openapi with it before writing the route pages.' : ''}` },
         });
 
         if (!canShowForms()) {
@@ -751,8 +770,16 @@ export function createMcpServer(opts = {}) {
         if (!result || result.action !== 'accept') {
           return { data: { status: result && result.action === 'decline' ? 'declined' : 'cancelled', note: 'The user did not answer the form. Ask whether to go on with your suggestions.' } };
         }
-        const preferences = savePreferences(preferencesFromForm(result.content || {}, scope));
-        return { data: { status: 'saved', preferences: formatPreferences(preferences) } };
+        const content = result.content || {};
+        const preferences = savePreferences(preferencesFromForm(content, scope));
+        const spec = scope.specs.includes(content.spec) ? content.spec : null;
+        return {
+          data: {
+            status: 'saved',
+            preferences: formatPreferences(preferences),
+            ...(spec ? { import: { source: spec, next: 'Call import_openapi with this source before writing the route pages; then add only what the spec does not say.' } } : {}),
+          },
+        };
       },
     },
     {

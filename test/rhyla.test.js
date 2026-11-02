@@ -17,7 +17,8 @@ import { findRoutes, projectStats } from '../src/core/routes.js';
 import { findLogoCandidates } from '../src/core/setup.js';
 import { normalizeApi, withApiReference } from '../src/core/api.js';
 import { buildOpenApi, importOpenApi, parseSpec } from '../src/core/openapi.js';
-import { exportSpec, importSpec, openapiExport } from '../src/commands/openapi.js';
+import { exportSpec, importSpec, initWithImport, openapiExport } from '../src/commands/openapi.js';
+import { detectFormat, importDocument, parseSource } from '../src/core/import.js';
 import { checkDocs, createRouteMatcher } from '../src/core/check.js';
 import check, { githubAnnotation } from '../src/commands/check.js';
 import { routeEndpoint, tryData, tryPanelHtml, trySettings } from '../src/core/try.js';
@@ -567,7 +568,7 @@ describe('mcp server', () => {
       const info = await (await fetch(`${base}/__rhyla/api/setup`)).json();
       assert.equal(info.agent, true);
       assert.deepEqual(info.project, {
-        name: 'tasks-api', codeFiles: 2, lines: 6, routes: 2, routeFiles: 2,
+        name: 'tasks-api', sources: [], codeFiles: 2, lines: 6, routes: 2, routeFiles: 2,
         routeList: [{ method: 'GET', path: '/tasks' }, { method: 'POST', path: '/tasks' }],
       });
       assert.equal(info.preferences.language, 'Português (Brasil)');
@@ -1962,5 +1963,233 @@ Texto com </script> no meio.
     const updated = matter(fs.readFileSync(file, 'utf8')).data.api;
     assert.deepEqual(updated.login, { token: 'token' });
     assert.equal(updated.responses[200], 'The session token');
+  });
+});
+
+describe('import: postman collections and the wizard', () => {
+  const json = async (res) => JSON.parse((await res).result.content[0].text);
+  const JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOjF9.realsignature123';
+  // Coleção com pastas, {{baseUrl}}, bearer herdado, script de login, variações e segredos
+  const collection = () => ({
+    info: { name: 'Task Manager', description: 'Tasks over HTTP. Log in first.', schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' },
+    auth: { type: 'bearer', bearer: [{ key: 'token', value: '{{token}}' }] },
+    variable: [{ key: 'baseUrl', value: 'http://localhost:3000/api' }, { key: 'listId', value: '7' }, { key: 'token', value: JWT }],
+    item: [
+      { name: 'Auth', auth: { type: 'noauth' }, item: [
+        {
+          name: 'Log in',
+          event: [{ listen: 'test', script: { exec: ['const json = pm.response.json();', 'pm.collectionVariables.set("token", json.data.access_token);'] } }],
+          request: {
+            method: 'POST',
+            header: [{ key: 'Content-Type', value: 'application/json' }],
+            body: { mode: 'raw', raw: '{\n  "email": "ana@example.com",\n  "password": "hunter2"\n}', options: { raw: { language: 'json' } } },
+            url: { raw: '{{baseUrl}}/auth/login', host: ['{{baseUrl}}'], path: ['auth', 'login'] },
+            description: 'Trades the email and password for a token. Valid for one hour.',
+          },
+          response: [
+            { name: 'Logged in', code: 200, header: [{ key: 'Content-Type', value: 'application/json' }], body: JSON.stringify({ data: { access_token: JWT, expires_in: 3600 } }) },
+            { name: 'Wrong password', code: 401, body: '{"error":"Unauthorized"}' },
+          ],
+        },
+      ] },
+      { name: 'Tasks', item: [
+        {
+          name: 'List tasks',
+          request: {
+            method: 'GET',
+            header: [{ key: 'Authorization', value: `Bearer ${JWT}` }, { key: 'X-Trace', value: 'abc' }, { key: 'Cookie', value: 'sid=secret' }],
+            url: { raw: '{{baseUrl}}/tasks?done=false&limit=20', host: ['{{baseUrl}}'], path: ['tasks'], query: [{ key: 'done', value: 'false', description: 'Only open tasks' }, { key: 'limit', value: '20' }, { key: 'q', value: '', disabled: true }] },
+          },
+          response: [{ name: 'Tasks', code: 200, header: [{ key: 'Content-Type', value: 'application/json' }], body: '[{"id":1,"title":"Buy bread","createdAt":"2026-10-29T12:00:00.000Z"}]' }],
+        },
+        { name: 'List done tasks', request: { method: 'GET', url: '{{baseUrl}}/tasks?done=true&page=2' }, response: [{ name: 'Nothing', code: 404, body: '' }] },
+        { name: 'Get task', request: { method: 'GET', url: { raw: '{{baseUrl}}/tasks/:id', host: ['{{baseUrl}}'], path: ['tasks', ':id'], variable: [{ key: 'id', value: '1', description: 'Task id' }] } } },
+        { name: 'Create task', request: { method: 'POST', body: { mode: 'raw', raw: '{\n  // required\n  "title": "Buy bread",\n  "listId": {{listId}},\n  "owner": {{ownerId}}\n}', options: { raw: { language: 'json' } } }, url: '{{baseUrl}}/lists/{{listId}}/tasks' } },
+        {
+          name: 'Upload attachment',
+          request: {
+            method: 'POST',
+            auth: { type: 'apikey', apikey: [{ key: 'key', value: 'X-Api-Key' }, { key: 'value', value: 'sk_live_123' }, { key: 'in', value: 'header' }] },
+            body: { mode: 'formdata', formdata: [{ key: 'file', type: 'file', src: '/home/x.png' }, { key: 'name', value: 'photo', type: 'text' }] },
+            url: '{{baseUrl}}/tasks/:id/attachments',
+          },
+        },
+        { name: 'Purge', request: { method: 'PURGE', url: '{{baseUrl}}/cache' } },
+      ] },
+    ],
+  });
+
+  test('a Postman collection becomes route pages, without its secrets', () => {
+    const imported = importDocument(collection());
+    assert.equal(imported.format, 'postman');
+    assert.equal(imported.info.title, 'Task Manager');
+    assert.equal(imported.info.summary, 'Tasks over HTTP.');
+    assert.equal(imported.info.baseUrl, 'http://localhost:3000/api');
+    const page = (file) => imported.pages.find((p) => p.file === file);
+    assert.deepEqual(imported.pages.map((p) => p.file), [
+      'auth/post-log_in.md', 'tasks/get-list_tasks.md', 'tasks/get-task.md', 'tasks/post-create_task.md', 'tasks/post-upload_attachment.md',
+    ]);
+
+    // Login: sem auth (pasta), token pelo script de teste, senha e token fora dos exemplos
+    const login = page('auth/post-log_in.md');
+    assert.equal(login.data.title, 'Log in');
+    assert.equal(login.data.description, 'Trades the email and password for a token.');
+    assert.match(login.body, /Valid for one hour/);
+    assert.deepEqual(login.data.api.login, { token: 'data.access_token' });
+    assert.equal(login.data.api.auth, 'none');
+    assert.deepEqual(login.data.api.body, { fields: { email: 'email', password: 'string' }, example: { email: 'ana@example.com', password: '<password>' } });
+    assert.deepEqual(login.data.api.responses[200].example, { data: { access_token: '<access_token>', expires_in: 3600 } });
+    assert.deepEqual(login.data.api.responses[200].fields, { data: { type: 'object', fields: { access_token: 'string', expires_in: 'integer' } } });
+    assert.equal(login.data.api.responses[401].description, 'Wrong password');
+
+    // Bearer herdado da coleção; Authorization e Cookie de verdade não entram; variações fundidas
+    const list = page('tasks/get-list_tasks.md').data.api;
+    assert.equal(list.auth, 'bearer');
+    assert.deepEqual(Object.keys(list.query), ['done', 'limit', 'q', 'page']);
+    assert.deepEqual(list.query.done, { type: 'boolean', description: 'Only open tasks', example: false });
+    assert.deepEqual(list.query.limit, { type: 'integer', example: 20 });
+    assert.deepEqual(list.headers, { 'X-Trace': { type: 'string', example: 'abc' } });
+    assert.equal(list.responses[200].schema.type, 'array');
+    assert.equal(list.responses[200].schema.items.properties.createdAt.format, 'date-time');
+    assert.equal(list.responses[404], 'Nothing');
+
+    assert.deepEqual(page('tasks/get-task.md').data.api.params, { id: { type: 'integer', description: 'Task id', example: 1 } });
+    // {{listId}} no meio do caminho vira parâmetro; fora de aspas no corpo, o valor da variável
+    const create = page('tasks/post-create_task.md').data.api;
+    assert.equal(create.path, '/lists/:listId/tasks');
+    assert.deepEqual(create.params, { listId: { type: 'integer', example: 7 } });
+    assert.deepEqual(create.body.example, { title: 'Buy bread', listId: 7, owner: '<ownerId>' });
+    const upload = page('tasks/post-upload_attachment.md').data.api;
+    assert.deepEqual(upload.auth, { type: 'apiKey', in: 'header', name: 'X-Api-Key' });
+    assert.deepEqual(upload.body, { content_type: 'multipart/form-data', fields: { file: 'binary', name: 'string' }, example: { file: '<file>', name: 'photo' } });
+
+    // Nada de segredo em lugar nenhum; os avisos dizem o que ficou de fora
+    const all = JSON.stringify(imported.pages);
+    for (const secret of ['hunter2', 'realsignature', 'sk_live_123', 'sid=secret']) assert.ok(!all.includes(secret), secret);
+    assert.ok(imported.warnings.some((w) => /PURGE/.test(w)));
+    assert.ok(imported.warnings.some((w) => /1 request repeats an endpoint/.test(w)));
+    assert.ok(imported.warnings.some((w) => /secret-looking values were left out/.test(w)));
+    // Os blocos importados são válidos
+    for (const p of imported.pages) assert.deepEqual(normalizeApi(p.data.api).warnings, [], p.file);
+  });
+
+  test('formats are detected, and the wrong files say what to export', () => {
+    assert.equal(detectFormat({ openapi: '3.1.0' }), 'openapi');
+    assert.equal(detectFormat({ swagger: '2.0' }), 'swagger');
+    assert.equal(detectFormat(collection()), 'postman');
+    assert.equal(detectFormat({ info: { name: 'x' }, item: [] }), 'postman');
+    assert.equal(detectFormat({ name: 'x' }), null);
+    assert.throws(() => importDocument({ id: 'x', name: 'Old', requests: [], order: [] }), /Postman collection v1[\s\S]*Collection v2\.1/);
+    assert.throws(() => importDocument({ id: 'e', name: 'Local', values: [{ key: 'baseUrl', value: 'http://x' }], _postman_variable_scope: 'environment' }), /environment[\s\S]*export the collection/);
+    assert.throws(() => importDocument({ hello: 'world' }), /Not an OpenAPI 3, Swagger 2 or Postman/);
+    assert.throws(() => parseSource('<!DOCTYPE html><html></html>', 'http://x/docs'), /HTML page[\s\S]*Swagger UI/);
+    // {{baseUrl}} definido só num environment: o servidor fica para o usuário
+    const doc = collection();
+    doc.variable = [];
+    const imported = importDocument(doc);
+    assert.equal(imported.info.baseUrl, null);
+    assert.ok(imported.warnings.some((w) => /\{\{baseUrl\}\}[\s\S]*"base_url"/.test(w)));
+  });
+
+  test('rhyla import and init --import write the pages from a Postman file', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rhyla-import-'));
+    fs.writeFileSync(path.join(dir, 'tasks.postman_collection.json'), JSON.stringify(collection()));
+    const result = await initWithImport('tasks.postman_collection.json', { cwd: dir, quiet: true });
+    assert.equal(result.format, 'postman');
+    assert.equal(result.created.length, 5);
+    assert.equal(fs.readFileSync(path.join(dir, 'rhyla-docs/body/home.md'), 'utf8'), '# Task Manager\n\nTasks over HTTP.\n');
+    const config = JSON.parse(fs.readFileSync(path.join(dir, 'rhyla-docs/config.json'), 'utf8'));
+    assert.equal(config.api.base_url, 'http://localhost:3000/api');
+    assert.equal(config.title, 'Task Manager');
+    assert.ok(!fs.existsSync(path.join(dir, 'rhyla-docs/body/guide')));
+    // Importar de novo não duplica; o texto escrito depois fica
+    const file = path.join(dir, 'rhyla-docs/body/tasks/get-task.md');
+    fs.appendFileSync(file, '\nWritten by a person.\n');
+    const again = await importSpec({ cwd: dir, source: 'tasks.postman_collection.json' });
+    assert.deepEqual([again.created.length, again.unchanged.length], [0, 5]);
+    assert.match(fs.readFileSync(file, 'utf8'), /Written by a person/);
+    // O build sai com as páginas e o openapi.json
+    build({ cwd: dir, quiet: true });
+    assert.equal(Object.keys(JSON.parse(fs.readFileSync(path.join(dir, 'dist/openapi.json'), 'utf8')).paths).length, 5);
+  });
+
+  // Projeto com uma coleção e um OpenAPI, para o wizard e o MCP
+  function specProject() {
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'rhyla-wizard-'));
+    fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify({ name: 'tasks-api', dependencies: { express: '4' } }));
+    fs.mkdirSync(path.join(project, 'docs'));
+    fs.writeFileSync(path.join(project, 'docs/tasks.postman_collection.json'), JSON.stringify(collection(), null, 2));
+    fs.writeFileSync(path.join(project, 'openapi.yaml'), 'openapi: 3.0.3\ninfo: { title: Spec, version: "1" }\npaths:\n  /health:\n    get: { summary: Health, responses: { 200: { description: ok } } }\n');
+    fs.writeFileSync(path.join(project, 'collection-notes.json'), '{"not": "postman"}');
+    return project;
+  }
+
+  test('find_routes points to Postman collections', () => {
+    const found = findRoutes(specProject());
+    assert.deepEqual(found.openapi_files, ['openapi.yaml']);
+    assert.deepEqual(found.postman_files, ['docs/tasks.postman_collection.json']);
+    assert.match(found.note, /postman_files/);
+  });
+
+  test('the wizard offers the specs of the project and imports the chosen one', async () => {
+    const project = specProject();
+    const srv = createMcpServer({ cwd: project, setupWaitMs: 2000 });
+    const call = (name, args = {}) => json(srv.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }));
+    const opened = await call('setup_wizard', { open: false });
+    const base = opened.url.replace('/__rhyla/setup', '');
+    const post = (route, body, type = 'application/json') => fetch(`${base}/__rhyla/api/setup${route}`, { method: 'POST', headers: { 'content-type': type }, body });
+    try {
+      const info = await (await fetch(`${base}/__rhyla/api/setup`)).json();
+      assert.deepEqual(info.project.sources, [
+        { path: 'openapi.yaml', format: 'openapi', formatName: 'OpenAPI 3', title: 'Spec', operations: 1 },
+        { path: 'docs/tasks.postman_collection.json', format: 'postman', formatName: 'Postman', title: 'Task Manager', operations: 5 },
+      ]);
+
+      const preview = await (await post('/source', JSON.stringify({ kind: 'file', path: 'docs/tasks.postman_collection.json' }))).json();
+      assert.deepEqual([preview.format, preview.operations, preview.created, preview.updated], ['postman', 5, 5, 0]);
+      assert.deepEqual(preview.folders, [{ folder: 'auth', count: 1 }, { folder: 'tasks', count: 4 }]);
+      assert.equal(preview.base_url, 'http://localhost:3000/api');
+      // A prévia não grava nada
+      assert.ok(!fs.existsSync(path.join(project, 'rhyla-docs/body/tasks')));
+      assert.equal((await post('/source', JSON.stringify({ kind: 'file', path: '../outside.json' }))).status, 400);
+      assert.equal((await post('/source', JSON.stringify({ kind: 'url', url: 'ftp://x' }))).status, 400);
+      const bad = await post('/source/upload?name=page.html', '<!doctype html><p>hi</p>', 'text/html');
+      assert.match((await bad.json()).error, /HTML page/);
+      const uploaded = await (await post('/source/upload?name=mine.json', JSON.stringify(collection()), 'application/octet-stream')).json();
+      assert.deepEqual([uploaded.source, uploaded.operations], ['mine.json', 5]);
+
+      // Envia o wizard com o arquivo enviado: as páginas são gravadas e o agente fica sabendo
+      const waiting = call('setup_wizard', { wait: true });
+      const ok = await post('', JSON.stringify({ source: { kind: 'upload', name: 'mine.json' }, language: 'English', mode: 'essential', flows: false, examples: ['curl'] }));
+      assert.equal(ok.status, 200);
+      const saved = await waiting;
+      assert.equal(saved.status, 'saved');
+      assert.equal(saved.imported.source, 'mine.json');
+      assert.equal(saved.imported.format, 'Postman');
+      assert.equal(saved.imported.pages, 5);
+      assert.ok(saved.imported.routes.includes('/auth/post-log_in'));
+      assert.match(saved.imported.next, /Do not rewrite them/);
+      // O título veio da coleção: não fica para o agente
+      assert.doesNotMatch(saved.site_todo || '', /Site title/);
+      assert.ok(fs.existsSync(path.join(project, 'rhyla-docs/body/tasks/get-task.md')));
+      assert.equal(JSON.parse(fs.readFileSync(path.join(project, 'rhyla-docs/config.json'), 'utf8')).title, 'Task Manager');
+
+      // O prompt init deixa a escolha para o usuário e respeita a importação
+      const init = (await srv.handle({ jsonrpc: '2.0', id: 1, method: 'prompts/get', params: { name: 'init', arguments: {} } })).result.messages[0].content.text;
+      assert.match(init, /first step lets the user import an OpenAPI \/ Swagger spec or a Postman collection/);
+      assert.match(init, /do not import a spec yourself/);
+      assert.match(init, /If it returns imported, the route pages are already written/);
+    } finally {
+      await call('stop_preview');
+    }
+  });
+
+  test('without a browser, ask_preferences offers the specs too', async () => {
+    const srv = createMcpServer({ cwd: (() => { const p = specProject(); init({ cwd: p, quiet: true, blank: true }); return p; })() });
+    await srv.handle({ jsonrpc: '2.0', id: 0, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {} } });
+    const res = await json(srv.handle({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'ask_preferences', arguments: {} } }));
+    assert.equal(res.questions[0].id, 'spec');
+    assert.deepEqual(res.questions[0].options, ['openapi.yaml', 'docs/tasks.postman_collection.json', 'No, read the code']);
+    assert.match(res.then, /call import_openapi/);
   });
 });

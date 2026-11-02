@@ -23,6 +23,8 @@ const HTTP_METHODS = 'get|post|put|patch|delete|head|options|all';
 const LOGIN_PATH = /\/(log-?in|sign-?in|sessions?|tokens?|authenticate|auth)\/?$/i;
 // Especificações OpenAPI no repositório e bibliotecas que geram uma com o servidor rodando
 const SPEC_FILE = /(^|\/)[^/]*(openapi|swagger)[^/]*\.(json|ya?ml)$/i;
+// "Tasks.postman_collection.json", "postman/api.json", "collection.json"
+const POSTMAN_FILE = /\.postman_collection\.json$|(^|\/)[^/]*(postman|collection)[^/]*\.json$/i;
 const SPEC_GENERATORS = /^(@fastify\/swagger|@nestjs\/swagger|swagger-jsdoc|swagger-autogen|express-openapi|express-oas-generator|tsoa|@hono\/zod-openapi|hono-openapi|@asteasolutions\/zod-to-openapi|@elysiajs\/swagger|@ts-rest\/open-api)$/;
 // Objetos que fazem requisições (clientes HTTP, testes) ou só têm get/set, não declaram rotas
 const NOT_A_SERVER = /^(axios|https?|got|ky|superagent|request|req|res|reply|ctx|client|apiclient|httpclient|fetcher|instance|agent|supertest|\$http|\$axios|cy|page|browser|map|cache|store|redis|params|query|headers|searchparams|url|config|env|process|window|document|storage|localstorage|sessionstorage|object|reflect|weakmap|response)$/i;
@@ -63,6 +65,20 @@ function readSmall(file) {
     return stat.isFile() && stat.size <= MAX_FILE_SIZE ? fs.readFileSync(file, 'utf8') : null;
   } catch {
     return null;
+  }
+}
+
+// Só o começo do arquivo: basta para reconhecer uma especificação, mesmo grande
+function readHead(file, bytes = 4096) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const buffer = Buffer.alloc(bytes);
+    return buffer.subarray(0, fs.readSync(fd, buffer, 0, bytes, 0)).toString('utf8');
+  } catch {
+    return '';
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
 }
 
@@ -156,18 +172,18 @@ function nextPagesApiPath(rel) {
  * dependências que geram uma em tempo de execução.
  */
 export function findOpenApi(root, files = listProjectFiles(root), deps = dependencies(root)) {
-  const specs = files.filter((f) => SPEC_FILE.test(f) && !/(^|\/)(node_modules|test|tests|__tests__|fixtures)\//i.test(f)).filter((f) => {
-    const head = (readSmall(path.join(root, f)) || '').slice(0, 4000);
-    return /["']?(openapi|swagger)["']?\s*:\s*["']?[23]\./.test(head);
-  });
-  return { files: specs, generators: deps.filter((d) => SPEC_GENERATORS.test(d)) };
+  const candidates = files.filter((f) => !/(^|\/)(node_modules|test|tests|__tests__|fixtures)\//i.test(f));
+  const head = (f) => readHead(path.join(root, f));
+  const specs = candidates.filter((f) => SPEC_FILE.test(f) && /["']?(openapi|swagger)["']?\s*:\s*["']?[23]\./.test(head(f)));
+  const postman = candidates.filter((f) => POSTMAN_FILE.test(f) && !specs.includes(f) && /getpostman\.com\/json\/collection\/v2|"_postman_id"/.test(head(f)));
+  return { files: specs, postman, generators: deps.filter((d) => SPEC_GENERATORS.test(d)) };
 }
 
 /**
  * @param {string} root raiz do projeto
  * @param {string[]} files arquivos do projeto (padrão: listProjectFiles)
  * @param {{ max?: number }} opts max: quantas rotas devolver (o `rhyla check` pede todas)
- * @returns {{ frameworks: string[], count: number, routes: object[], files: string[], unresolved_mounts: object[], openapi_files?: string[], openapi_generators?: string[], truncated?: boolean, login_hint?: string, note: string }}
+ * @returns {{ frameworks: string[], count: number, routes: object[], files: string[], unresolved_mounts: object[], openapi_files?: string[], postman_files?: string[], openapi_generators?: string[], truncated?: boolean, login_hint?: string, note: string }}
  */
 export function findRoutes(root, files = listProjectFiles(root), { max = MAX_ROUTES } = {}) {
   const deps = dependencies(root);
@@ -284,11 +300,13 @@ export function findRoutes(root, files = listProjectFiles(root), { max = MAX_ROU
     files: [...new Set([...routeFiles, ...mountFiles])].sort(),
     unresolved_mounts: mounts.filter((m) => !m.target).map(({ prefix, file, line, ident }) => ({ prefix, file, line, ident })),
     ...(openapi.files.length ? { openapi_files: openapi.files } : {}),
+    ...(openapi.postman.length ? { postman_files: openapi.postman } : {}),
     ...(openapi.generators.length ? { openapi_generators: openapi.generators } : {}),
     ...(routes.length > max ? { truncated: true } : {}),
     ...(routes.some((r) => r.login) ? { login_hint: 'Routes with login: true look like the login route. If the code confirms it returns a token, add login: { token: <path of the token in the response> } to its api block: the "Try it" panel then keeps the token for the other routes.' } : {}),
     note: 'Found by pattern matching, without running the code. Prefixes mounted in another file are resolved one level deep; check unresolved_mounts and any path that looks incomplete. Routes built dynamically (loops, config files) are not listed.'
       + (openapi.files.length ? ' openapi_files: the API is already described in an OpenAPI spec; import_openapi turns it into route pages without reading the code.' : '')
+      + (openapi.postman.length ? ' postman_files: Postman collections of this API; import_openapi turns them into route pages too.' : '')
       + (openapi.generators.length && !openapi.files.length ? ' openapi_generators: the server builds an OpenAPI spec at runtime; if it is running, import_openapi can read it from its JSON URL (ask the user for it).' : ''),
   };
 }

@@ -6,7 +6,7 @@ import dev from '../src/commands/dev.js';
 import build from '../src/commands/build.js';
 import serve from '../src/commands/serve.js';
 import mcp from '../src/commands/mcp.js';
-import { openapiExport, openapiImport } from '../src/commands/openapi.js';
+import { initWithImport, openapiExport, openapiImport } from '../src/commands/openapi.js';
 import check from '../src/commands/check.js';
 
 const { version } = createRequire(import.meta.url)('../package.json');
@@ -33,7 +33,8 @@ program
   .description('Create base documentation structure in rhyla-docs/')
   .option('-f, --force', 'Overwrite template files if rhyla-docs/ already exists')
   .option('--blank', 'Only the structure (home and 404 pages), without the sample pages')
-  .action(run(init));
+  .option('--import <source>', 'Also write the route pages from an OpenAPI / Swagger spec or a Postman collection (file or URL); implies --blank')
+  .action(run((opts) => (opts.import ? initWithImport(opts.import, opts) : init(opts))));
 
 program
   .command('dev')
@@ -73,13 +74,20 @@ program
     if (!check(opts).passed) process.exitCode = 1;
   }));
 
+program
+  .command('import <source>')
+  .description('Write one route page per operation of an OpenAPI 3 / Swagger 2 spec or a Postman collection (JSON or YAML file, or URL)')
+  .option('--dry-run', 'Only show what would change')
+  .option('--no-update', 'Leave pages that already document an operation untouched')
+  .action(run(openapiImport));
+
 const openapi = program
   .command('openapi')
-  .description('Import an OpenAPI spec into pages, or export openapi.json from the pages');
+  .description('Import a spec into pages (same as "rhyla import"), or export openapi.json from the pages');
 
 openapi
   .command('import <source>')
-  .description('Write one page per operation of an OpenAPI 3 / Swagger 2 spec (JSON or YAML file, or URL)')
+  .description('Same as "rhyla import <source>"')
   .option('--dry-run', 'Only show what would change')
   .option('--no-update', 'Leave pages that already document an operation untouched')
   .action(run(openapiImport));

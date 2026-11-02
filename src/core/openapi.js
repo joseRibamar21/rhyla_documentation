@@ -381,16 +381,16 @@ function authFor(op, doc, schemes) {
   return undefined;
 }
 
-function slugify(s, max = 60) {
+export function slugify(s, max = 60) {
   return fold(s).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, max).replace(/_+$/, '');
 }
 const snake = (id) => String(id).replace(/([a-z0-9])([A-Z])/g, '$1_$2');
-const humanize = (s) => {
+export const humanize = (s) => {
   const t = snake(s).replace(/[_-]+/g, ' ').trim().toLowerCase();
   return t.charAt(0).toUpperCase() + t.slice(1);
 };
 
-function firstSentence(markdown) {
+export function firstSentence(markdown) {
   const plain = String(markdown || '').replace(/[`*_#>[\]]/g, '').replace(/\(([^)]*)\)/g, '').replace(/\s+/g, ' ').trim();
   const m = plain.match(/^(.{10,200}?[.!?])(\s|$)/);
   return m ? m[1] : plain.length <= 200 ? plain : '';
@@ -583,10 +583,12 @@ export function applyImport(bodyPath, imported, { update = true, dryRun = false 
     const page = existing.get(key);
     if (page) {
       const parsed = matter(fs.readFileSync(page.file, 'utf8'));
-      // `login` não existe no OpenAPI: a marcação da rota de login fica
-      const { login, ...current } = parsed.data.api;
-      const api = login !== undefined ? { ...op.data.api, login } : op.data.api;
-      if (JSON.stringify(current) === JSON.stringify(op.data.api)) result.unchanged.push(page.route);
+      // `login` não existe no OpenAPI: a marcação que a página já tem fica (o Postman pode trazer uma)
+      const { login: kept, ...current } = parsed.data.api;
+      const { login: fresh, ...next } = op.data.api;
+      const login = kept !== undefined ? kept : fresh;
+      const api = login !== undefined ? { ...next, login } : next;
+      if (JSON.stringify(current) === JSON.stringify(next) && (kept !== undefined || fresh === undefined)) result.unchanged.push(page.route);
       else if (!update) result.skipped.push(page.route);
       else {
         if (!dryRun) fs.writeFileSync(page.file, stringifyPage(parsed.content, { ...parsed.data, api }), 'utf8');
